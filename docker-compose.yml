@@ -1,0 +1,75 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: mariscodelivery-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27017:27017"
+
+  evolution-api:
+    image: atendai/evolution-api:v2.2.3
+    container_name: mariscodelivery-evolution
+    restart: unless-stopped
+    environment:
+      SERVER_URL: "http://evolution-api:8080"
+      AUTHENTICATION_TYPE: apikey
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:?EVOLUTION_API_KEY is required}
+      LANGUAGE: "pt-BR"
+      # Sem banco externo — armazena instâncias em volume local
+      DATABASE_ENABLED: "false"
+      CACHE_REDIS_ENABLED: "false"
+      RABBITMQ_ENABLED: "false"
+      WEBHOOK_GLOBAL_ENABLED: "false"
+      DEL_INSTANCE: "false"
+      # Não armazena mensagens (privacidade)
+      STORE_MESSAGES: "false"
+      STORE_MESSAGE_UP: "false"
+      STORE_CONTACTS: "false"
+      STORE_CHATS: "false"
+    volumes:
+      - evolution_instances:/evolution/instances
+    ports:
+      - "8080:8080"
+
+  backend:
+    build: ./backend
+    container_name: mariscodelivery-backend
+    restart: unless-stopped
+    depends_on:
+      - mongo
+      - evolution-api
+    environment:
+      MONGO_URL: mongodb://mongo:27017
+      DB_NAME: ${DB_NAME:-egdelivery}
+      APP_ENV: ${APP_ENV:-development}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      UPLOAD_DIR: /app/uploads
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      OPENPIX_WEBHOOK_SECRET: ${OPENPIX_WEBHOOK_SECRET:-}
+      EVOLUTION_API_URL: http://evolution-api:8080
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:?EVOLUTION_API_KEY is required}
+      BACKEND_URL: http://backend:8001
+    volumes:
+      - uploads_data:/app/uploads
+    ports:
+      - "8001:8001"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-http://localhost:8001}
+    container_name: mariscodelivery-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+
+volumes:
+  mongo_data:
+  uploads_data:
+  evolution_instances:

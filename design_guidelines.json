@@ -1,0 +1,143 @@
+{
+  "theme_and_archetype": {
+    "public_menu": {
+      "theme": "LIGHT",
+      "archetype": "1_Organic_Earthy_WhiteLabel",
+      "rationale": "Food delivery needs a clean, appetizing base (off-whites, soft shadows) to let high-quality food photography and the restaurant's custom brand colors shine."
+    },
+    "admin_dashboard": {
+      "theme": "LIGHT",
+      "archetype": "4_Swiss_High_Contrast",
+      "rationale": "KPI-first control panel. Emphasizes simplicity, data density, operational alerting, and fast action."
+    }
+  },
+  "typography": {
+    "anti_default_rules": "Avoid Inter for public headings. Optimize for appetite appeal and clarity.",
+    "public_menu": {
+      "headings": {
+        "font_family": "Outfit, sans-serif",
+        "weights": ["600", "700"],
+        "tracking": "tracking-tight"
+      },
+      "body": {
+        "font_family": "Manrope, sans-serif",
+        "weights": ["400", "500"]
+      }
+    },
+    "admin_dashboard": {
+      "headings": {
+        "font_family": "Cabinet Grotesk, sans-serif",
+        "weights": ["700"]
+      },
+      "body": {
+        "font_family": "Inter, sans-serif",
+        "weights": ["400", "500"]
+      }
+    },
+    "scale": {
+      "h1_mobile": "text-3xl sm:text-4xl",
+      "h2": "text-2xl sm:text-3xl",
+      "product_title": "text-lg font-semibold",
+      "price": "text-base font-bold",
+      "body": "text-sm",
+      "small": "text-xs"
+    }
+  },
+  "color_palette": {
+    "system_base": {
+      "background": "#FAFAFA",
+      "surface": "#FFFFFF",
+      "border": "#E5E7EB",
+      "text_primary": "#111827",
+      "text_secondary": "#6B7280"
+    },
+    "restaurant_custom_variables": {
+      "css_vars_required": true,
+      "brand_primary": "var(--brand-primary, #EF4444)",
+      "brand_primary_foreground": "var(--brand-primary-foreground, #FFFFFF)",
+      "brand_secondary": "var(--brand-secondary, #FEE2E2)",
+      "usage": "Use primary for CTAs, active states, cart button, and active chips. Secondary for soft backgrounds like unselected chips or highlights."
+    },
+    "order_status": {
+      "pending": "#F59E0B",
+      "accepted": "#3B82F6",
+      "preparing": "#8B5CF6",
+      "ready": "#10B981",
+      "out_for_delivery": "#06B6D4",
+      "completed": "#22C55E",
+      "cancelled": "#EF4444"
+    }
+  },
+  "layout_and_spacing": {
+    "public_menu_mobile_first": {
+      "container": "w-full max-w-md mx-auto bg-[#FAFAFA] min-h-screen relative pb-24 shadow-2xl",
+      "header": "relative w-full h-48 md:h-56 rounded-b-3xl overflow-hidden shadow-sm",
+      "category_chips": "flex overflow-x-auto gap-3 py-4 px-4 scrollbar-hide snap-x",
+      "product_grid": "flex flex-col gap-4 px-4 pb-6",
+      "cart_bottom_bar": "fixed bottom-0 left-0 right-0 w-full max-w-md mx-auto p-4 bg-white border-t border-gray-100 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] z-50 rounded-t-2xl",
+      "spacing_scale": "Use p-4 for standard container edges, gap-4 for list items. Generous whitespace around food images."
+    },
+    "admin_dashboard": {
+      "layout": "Grid-based control panel. Left sidebar (w-64) + main content area.",
+      "kpi_strip": "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8",
+      "tables": "Dense layout, p-3 cell padding, border-collapse.",
+      "surface_styles": "Neumorphism mix: Flat white background for cards with 1px border and very soft shadow-sm."
+    }
+  },
+  "components_guidelines": {
+    "public_header": "Includes cover image background (object-cover, 80% opacity overlay gradient). Floating white card overlay at bottom of header containing Restaurant Logo, Name, and Open/Closed status.",
+    "category_chip": "Rounded-full px-4 py-2 text-sm font-medium transition-colors cursor-pointer. Active: bg-[var(--brand-primary)] text-white. Inactive: bg-white text-gray-600 border border-gray-200.",
+    "product_card": "Horizontal layout for list: Image (w-28 h-28 rounded-xl object-cover) on left, info (title, trunc desc, price) on right. Minimalist, no heavy shadows, just 1px border or subtle bg-white. Entire card is clickable.",
+    "product_modal": "Drawer/BottomSheet style on mobile. Large hero image at top. Sections for Add-ons (Adicionais) separated by gray dividers. Add-on groups must clearly show 'Escolha 1' (Radio) or 'Até X opções' (Checkbox).",
+    "whatsapp_checkout": "Clear summary list. 'Enviar Pedido' CTA button using WhatsApp green (#25D366) or Brand Primary. Includes delivery fee, subtotal, total.",
+    "admin_status_badge": "Rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wider. Colored based on order_status palette.",
+    "shadcn_usage": "Admin uses standard Shadcn (Tables, Dialogs, Select, Tabs). Public app uses pure HTML/Tailwind for layout structural freedom, but Shadcn Drawers/Dialogs for product modals.",
+    "icons": "lucide-react for Admin. @phosphor-icons/react (Duotone) for Public menu."
+  },
+  "motion_and_interaction": {
+    "public_menu": {
+      "scroll": "Smooth snap scrolling for categories.",
+      "buttons": "Active scale down (active:scale-95) for tactile feel.",
+      "modals": "Slide up from bottom (Drawer style) for product details to keep one-handed thumb reachability."
+    },
+    "admin": {
+      "hover": "Subtle translate-y-[-2px] on KPI cards.",
+      "transitions": "Fast (150ms) ease-in-out for tabs and dropdowns."
+    }
+  },
+  "media_and_images": {
+    "restaurant_cover_placeholder": {
+      "url": "https://images.pexels.com/photos/31124637/pexels-photo-31124637.jpeg",
+      "description": "Warm cafe interior, to be used as default cover image for restaurant."
+    },
+    "product_placeholders": [
+      {
+        "url": "https://images.pexels.com/photos/109400/pexels-photo-109400.jpeg",
+        "description": "Gourmet burger (Primary showcase product)"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1662452883375-9226ea22c765?ixlib=rb-4.1.0&q=85",
+        "description": "Burger and fries (List item)"
+      },
+      {
+        "url": "https://images.pexels.com/photos/35017349/pexels-photo-35017349.jpeg",
+        "description": "Premium pepperoni pizza slice"
+      }
+    ],
+    "guidelines": "Never use dummyimage or placehold.it. Use these URLs strictly for seed data or UI prototyping. Ensure object-cover and max-h logic applies to prevent layout shifting."
+  },
+  "accessibility_and_testing": {
+    "contrast": "Ensure var(--brand-primary) and var(--brand-primary-foreground) meet 4.5:1 contrast. Use black text if primary is a light color.",
+    "testing": "CRITICAL: All interactive elements MUST include data-testid. Format: kebab-case, role-based. e.g., data-testid='category-chip-burgers', data-testid='add-to-cart-btn', data-testid='order-status-select'."
+  },
+  "instructions_to_main_agent": [
+    "Build the public app layout mobile-first using max-w-md mx-auto container wrapping to simulate a mobile app on desktop browsers.",
+    "Implement CSS variables in globals.css for --brand-primary and --brand-secondary. The public UI must consume these.",
+    "The Cart component on the public side must be a fixed bottom bar that appears when items are in the cart.",
+    "Product variations/addons should be handled via a bottom drawer/modal overlay (Shadcn Drawer works great here).",
+    "Admin panel must be a separate route (e.g., /admin) with a standard sidebar+topbar layout.",
+    "Do NOT use 'Inter' for public headings. Use 'Outfit' or fallback to a clean sans-serif like Manrope.",
+    "Use Phosphor icons for the consumer side to give a premium feel, Lucide for the admin side.",
+    "Adhere strictly to data-testid requirements for ALL buttons, inputs, chips, and cards."
+  ]
+}

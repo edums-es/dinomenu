@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EG Delivery Impressora</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand-mark">EG</div>
+        <div>
+          <strong>EG Delivery</strong>
+          <span>Impressora automática</span>
+        </div>
+      </header>
+
+      <section class="status-card">
+        <div class="status-row">
+          <span id="statusDot" class="status-dot"></span>
+          <div>
+            <p id="statusLabel" class="status-label">Iniciando</p>
+            <p id="statusHint" class="muted">Verificando conexão com a loja.</p>
+          </div>
+        </div>
+        <div class="metrics">
+          <div>
+            <span>Último pedido</span>
+            <strong id="lastOrder">-</strong>
+          </div>
+          <div>
+            <span>Impressos</span>
+            <strong id="printedCount">0</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <label for="printerSelect">Impressora</label>
+        <div class="printer-row">
+          <select id="printerSelect">
+            <option value="">Impressora padrão do Windows</option>
+          </select>
+          <button id="refreshPrinters" class="icon-button" title="Atualizar impressoras">↻</button>
+        </div>
+        <p class="muted">Deixe como padrão se a loja usa só uma impressora.</p>
+      </section>
+
+      <section class="actions">
+        <button id="testPrint" class="primary">Testar impressão</button>
+        <button id="restart" class="secondary">Reiniciar conexão</button>
+      </section>
+
+      <section id="errorBox" class="error-box hidden">
+        <strong>Atenção</strong>
+        <p id="errorText"></p>
+      </section>
+
+      <footer>
+        <button id="openLogs" class="ghost">Abrir logs</button>
+        <button id="hideWindow" class="ghost">Ocultar</button>
+      </footer>
+    </main>
+    <script src="./renderer.js"></script>
+  </body>
+</html>

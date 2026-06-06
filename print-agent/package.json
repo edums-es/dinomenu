@@ -1,0 +1,55 @@
+{
+  "name": "eg-delivery-print-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Aplicativo local de impressao automatica do EG Delivery.",
+  "author": "Easy Growth",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "agent": "node agent.js",
+    "printers": "node agent.js --list-printers",
+    "dist": "electron-builder --win nsis",
+    "dist:portable": "electron-builder --win portable"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "br.com.easygrowth.egdelivery.print",
+    "productName": "EG Delivery Impressora",
+    "artifactName": "${productName} Setup.${ext}",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "agent.js",
+      "package.json",
+      "src/**/*"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "publisherName": "Easy Growth"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "EG Delivery Impressora",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}

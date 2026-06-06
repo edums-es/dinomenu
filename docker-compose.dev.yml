@@ -1,0 +1,50 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: mariscodelivery-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27017:27017"
+
+  backend:
+    build: ./backend
+    container_name: mariscodelivery-backend
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    environment:
+      MONGO_URL: mongodb://mongo:27017
+      DB_NAME: mariscodelivery
+      JWT_SECRET: troque_por_uma_chave_forte_aqui
+      UPLOAD_DIR: /app/uploads
+      CORS_ORIGINS: "http://localhost:3000"
+    volumes:
+      - ./backend:/app          # monta o código — qualquer mudança recarrega
+      - uploads_data:/app/uploads
+    ports:
+      - "8001:8001"
+    command: uvicorn server:app --host 0.0.0.0 --port 8001 --reload
+
+  frontend:
+    image: node:18-alpine
+    container_name: mariscodelivery-frontend
+    working_dir: /app
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      REACT_APP_BACKEND_URL: http://localhost:8001
+      CHOKIDAR_USEPOLLING: "true"   # necessário no WSL/Windows para hot reload funcionar
+      WDS_SOCKET_PORT: 3000
+    volumes:
+      - ./frontend:/app             # monta o código
+      - /app/node_modules           # preserva node_modules do container
+    ports:
+      - "3000:3000"
+    command: sh -c "npm install --legacy-peer-deps --silent && npm start"
+
+volumes:
+  mongo_data:
+  uploads_data:

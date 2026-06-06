@@ -1,0 +1,101 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: "Manrope", -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 97%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 222 47% 11%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 210 40% 94%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 94%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 210 40% 94%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 214 32% 89%;
+    --input: 214 32% 89%;
+    --ring: 222 47% 11%;
+    --radius: 0.75rem;
+    --brand-primary: #22E39B;
+    --brand-primary-foreground: #04110C;
+    --brand-secondary: rgba(34, 227, 155, 0.16);
+  }
+
+  .dark {
+    --background: 0 0% 7%;
+    --foreground: 0 0% 93%;
+    --card: 0 0% 11%;
+    --card-foreground: 0 0% 93%;
+    --popover: 0 0% 9%;
+    --popover-foreground: 0 0% 93%;
+    --primary: 0 0% 93%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 0 0% 93%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 55%;
+    --accent: 0 0% 17%;
+    --accent-foreground: 0 0% 93%;
+    --destructive: 0 63% 45%;
+    --destructive-foreground: 210 40% 92%;
+    --border: 0 0% 18%;
+    --input: 0 0% 18%;
+    --ring: 0 0% 75%;
+    color-scheme: dark;
+  }
+
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground; }
+}
+
+/* ── BRAND UTILITIES ───────────────────────────────────────────────────── */
+@layer components {
+  .brand-bg  { background-color: var(--brand-primary); color: var(--brand-primary-foreground); }
+  .brand-text { color: var(--brand-primary); }
+  .brand-border { border-color: var(--brand-primary); }
+  .brand-soft { background-color: var(--brand-secondary); }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ── DARK MODE GLOBAL OVERRIDES ──────────────────────────────────────────
+   Public pages use ForceLightMode (removes .dark from <html>), so these
+   overrides ONLY affect admin/super pages. Safe to use !important here.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* Backgrounds */
+.dark .bg-white  { background-color: hsl(var(--card))       !important; }
+.dark .bg-gray-50 { background-color: hsl(var(--background)) !important; }
+.dark .bg-gray-100 { background-color: hsl(var(--muted))     !important; }
+
+/* Borders */
+.dark .border-gray-100 { border-color: hsl(var(--border)) !important; }
+.dark .border-gray-200 { border-color: hsl(var(--border)) !important; }
+.dark .border-gray-300 { border-color: hsl(var(--border)) !important; }
+
+/* Text */
+.dark .text-gray-900 { color: hsl(var(--foreground))        !important; }
+.dark .text-gray-700 { color: hsl(var(--foreground))        !important; }
+.dark .text-gray-600 { color: hsl(var(--muted-foreground))  !important; }
+.dark .text-gray-400 { color: hsl(var(--muted-foreground))  !important; }

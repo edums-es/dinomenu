@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pt-BR">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#020403" />
+        <meta name="description" content="Cardápio digital e delivery online por EG Delivery." />
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content="EG Delivery" />
+        <meta property="og:description" content="Acesse o cardápio digital, escolha seus produtos e faça seu pedido online." />
+        <meta property="og:image" content="https://app.easygrowth.com.br/logoeg.png" />
+        <meta property="og:site_name" content="EG Delivery" />
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content="EG Delivery" />
+        <meta name="twitter:description" content="Cardápio digital e delivery online." />
+        <meta name="twitter:image" content="https://app.easygrowth.com.br/logoeg.png" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap" rel="stylesheet" />
+        <title>EG Delivery</title>
+        <script>window.addEventListener("error",function(e){if(e.error instanceof DOMException&&e.error.name==="DataCloneError"&&e.message&&e.message.includes("PerformanceServerTiming")){e.stopImmediatePropagation();e.preventDefault()}},true);</script>
+        <link rel="manifest" href="/manifest.json" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+</head>
+    <body>
+        <noscript>You need to enable JavaScript to run this app.</noscript>
+        <div id="root"></div>
+        <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
+      }
+    </script>
+</body>
+</html>
