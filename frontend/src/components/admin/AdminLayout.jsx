@@ -119,7 +119,7 @@ export default function AdminLayout() {
             </div>
             <span className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.name}</span>
           </div>
-          <Button variant="ghost" onClick={() => { logout(); navigate("/login"); }}
+          <Button variant="ghost" onClick={() => { logout(); navigate("/themazuki/master"); }}
             className="w-full justify-start text-sm text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">
             <LogOut className="w-4 h-4 mr-2" /> Sair
           </Button>

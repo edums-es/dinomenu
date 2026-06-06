@@ -112,7 +112,7 @@ export default function SuperLayout() {
           <p className="text-[11px] text-gray-600 px-3 truncate">{user?.email}</p>
           <Button
             variant="ghost"
-            onClick={() => { logout(); navigate("/login"); }}
+            onClick={() => { logout(); navigate("/themazuki/master"); }}
             className="w-full justify-start text-gray-400 hover:text-red-400 hover:bg-white/5 text-sm"
           >
             <LogOut className="w-4 h-4 mr-2" /> Sair

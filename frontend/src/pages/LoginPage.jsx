@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   ArrowRight,
@@ -108,13 +108,13 @@ export default function LoginPage() {
     <main className="login-page">
       <section className="login-brand-panel">
         <div className="login-panel-glow" />
-        <Link to="/" className="login-logo" aria-label="EG Delivery">
+        <div className="login-logo" aria-label="EG Delivery">
           <img src="/logoeg.png" alt="" />
           <span>
             <strong>EG Delivery</strong>
             <small>by Easy Growth</small>
           </span>
-        </Link>
+        </div>
 
         <div className="login-brand-copy">
           <span className="login-kicker">

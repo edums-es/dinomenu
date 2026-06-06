@@ -3,8 +3,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { ThemeProvider, ForceLightMode } from "@/context/ThemeContext";
 
-import Landing from "@/pages/Landing";
 import LoginPage from "@/pages/LoginPage";
+import NotFound from "@/pages/NotFound";
 import MenuPage from "@/pages/public/MenuPage";
 import TrackOrder from "@/pages/public/TrackOrder";
 import MyOrders from "@/pages/public/MyOrders";
@@ -41,7 +41,7 @@ import WhatsApp from "@/pages/admin/WhatsApp";
 function Protected({ children, roles }) {
   const { user } = useAuth();
   if (user === null) return <div className="min-h-screen grid place-items-center text-muted-foreground">Carregando...</div>;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/themazuki/master" replace />;
   if (roles && !roles.includes(user.role)) return <Navigate to={user.role === "super_admin" ? "/super" : "/supermaster"} replace />;
   return children;
 }
@@ -52,8 +52,7 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<ForceLightMode><Landing /></ForceLightMode>} />
-            <Route path="/login" element={<ForceLightMode><LoginPage /></ForceLightMode>} />
+            <Route path="/themazuki/master" element={<ForceLightMode><LoginPage /></ForceLightMode>} />
             <Route path="/loja/:slug" element={<ForceLightMode><MenuPage /></ForceLightMode>} />
             <Route path="/pedido/:order_id" element={<ForceLightMode><TrackOrder /></ForceLightMode>} />
             <Route path="/meus-pedidos" element={<ForceLightMode><MyOrders /></ForceLightMode>} />
@@ -93,7 +92,7 @@ function App() {
               <Route path="configuracoes" element={<PlatformSettings />} />
             </Route>
 
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<ForceLightMode><NotFound /></ForceLightMode>} />
           </Routes>
           <Toaster position="top-center" richColors />
         </BrowserRouter>
