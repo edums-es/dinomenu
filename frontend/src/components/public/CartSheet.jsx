@@ -32,32 +32,6 @@ const maskCep = (value) => {
   const digits = onlyDigits(value).slice(0, 8);
   return digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
 };
-const normalizeText = (value) =>
-  (value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
-const zoneMatchesNeighborhood = (zoneName, neighborhoodName) => {
-  const zone = normalizeText(zoneName);
-  const neighborhood = normalizeText(neighborhoodName);
-  return !!zone && !!neighborhood && (
-    zone === neighborhood ||
-    (zone.length >= 4 && neighborhood.includes(zone)) ||
-    (neighborhood.length >= 4 && zone.includes(neighborhood))
-  );
-};
-const splitTerms = (value) =>
-  Array.isArray(value) ? value : String(value || "").split(",");
-const zoneMatchesCep = (zone, cepDigits) =>
-  splitTerms(zone.cep_prefixes).map(onlyDigits).filter(Boolean).some((prefix) => cepDigits.startsWith(prefix));
-const zoneMatchesAddress = (zone, addressData = {}, cepDigits = "") => {
-  const values = [addressData.bairro, addressData.localidade, addressData.logradouro];
-  const regionTerms = [zone.neighborhood, ...splitTerms(zone.aliases)];
-  const cityTerms = splitTerms(zone.city_names);
-  return (
-    regionTerms.some((term) => values.some((value) => zoneMatchesNeighborhood(term, value))) ||
-    cityTerms.some((term) => zoneMatchesNeighborhood(term, addressData.localidade)) ||
-    zoneMatchesCep(zone, cepDigits)
-  );
-};
-
 export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
   const { items, updateQuantity, removeItem, subtotal, clearCart } = useCart();
   const [step, setStep] = useState("cart"); // cart | checkout | pix
@@ -86,28 +60,12 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
   const [payment, setPayment] = useState(restaurant?.payment_methods?.[0] || "Dinheiro");
   const [changeFor, setChangeFor] = useState("");
   const [orderNotes, setOrderNotes] = useState("");
-  const [cepCheck, setCepCheck] = useState(null);
-
-  const zones = useMemo(() => restaurant?.delivery_zones || [], [restaurant?.delivery_zones]);
-  const activeZones = useMemo(() => zones.filter((z) => z.active), [zones]);
-  const selectedZone = useMemo(() => {
-    if (!neighborhood) return null;
-    return activeZones.find((z) => zoneMatchesAddress(z, { bairro: neighborhood })) || null;
-  }, [activeZones, neighborhood]);
-  const cepZone = useMemo(() => {
-    if (!cepCheck?.neighborhood && !cepCheck?.digits) return null;
-    return activeZones.find((z) => zoneMatchesAddress(z, cepCheck, cepCheck.digits)) || null;
-  }, [activeZones, cepCheck]);
 
   const deliveryFee = useMemo(() => {
     if (type === "pickup") return 0;
     if (coupon?.free_delivery) return 0;
-    if (restaurant?.delivery_fee_mode === "neighborhood") {
-      const zone = cepZone || selectedZone;
-      return zone ? Number(zone.fee) || 0 : 0;
-    }
-    return restaurant?.flat_delivery_fee || 0;
-  }, [type, coupon, restaurant, cepZone, selectedZone]);
+    return Number(restaurant?.flat_delivery_fee) || 0;
+  }, [type, coupon, restaurant?.flat_delivery_fee]);
 
   const discount = coupon?.discount || 0;
   const total = Math.max(0, subtotal + deliveryFee - discount);
@@ -140,11 +98,9 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
   useEffect(() => {
     const digits = onlyDigits(cep);
     if (type !== "delivery") {
-      setCepCheck(null);
       return;
     }
     if (digits.length !== 8) {
-      setCepCheck(null);
       return;
     }
 
@@ -154,31 +110,20 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
       .then((data) => {
         if (cancelled) return;
         if (data?.erro) {
-          setCepCheck({ digits, neighborhood: "", allowed: false });
           toast.error("CEP nao encontrado");
           return;
         }
-        const addressData = {
-          digits,
-          bairro: data.bairro || "",
-          neighborhood: data.bairro || "",
-          localidade: data.localidade || "",
-          logradouro: data.logradouro || "",
-        };
-        const zone = activeZones.find((z) => zoneMatchesAddress(z, addressData, digits));
-        setCepCheck({ ...addressData, allowed: activeZones.length === 0 || !!zone });
         if (data.logradouro) setStreet(data.logradouro);
         if (data.bairro) setNeighborhood(data.bairro);
       })
       .catch(() => {
         if (!cancelled) {
-          setCepCheck({ digits, neighborhood: "", allowed: false });
           toast.error("Nao foi possivel consultar o CEP");
         }
       });
 
     return () => { cancelled = true; };
-  }, [cep, type, activeZones]);
+  }, [cep, type]);
 
   const applyCoupon = async () => {
     if (!couponInput.trim()) return;
@@ -223,21 +168,6 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
     if (!name.trim() || !phone.trim()) { toast.error("Informe nome e telefone"); return false; }
     if (type === "delivery" && (!street.trim() || !number.trim() || !neighborhood.trim())) {
       toast.error("Preencha o endereço de entrega"); return false;
-    }
-    if (type === "delivery" && activeZones.length > 0) {
-      const digits = onlyDigits(cep);
-      if (digits.length !== 8 || cepCheck?.digits !== digits) {
-        toast.error("Informe um CEP valido para consultar a entrega");
-        return false;
-      }
-      if (!cepCheck.allowed) {
-        toast.error("Ainda nao atendemos esse CEP");
-        return false;
-      }
-    }
-    if (type === "delivery" && restaurant?.delivery_fee_mode === "neighborhood" && activeZones.length > 0 && !cepZone) {
-      toast.error("Ainda nao atendemos esse CEP");
-      return false;
     }
     if (subtotal < (restaurant?.minimum_order || 0)) {
       toast.error(`Pedido mínimo de ${brl(restaurant.minimum_order)}`); return false;
@@ -545,21 +475,7 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
                 </div>
                 <div>
                   <Label>Bairro</Label>
-                  {activeZones.length > 0 ? (
-                    <Select value={neighborhood} onValueChange={setNeighborhood}>
-                      <SelectTrigger data-testid="checkout-neighborhood" className="mt-1"><SelectValue placeholder="Selecione o bairro" /></SelectTrigger>
-                      <SelectContent>
-                        {activeZones.map((z) => (
-                          <SelectItem key={z.id} value={z.neighborhood}>{z.neighborhood} · {brl(z.fee)}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} data-testid="checkout-neighborhood" className="mt-1" />
-                  )}
-                  {activeZones.length > 0 && cepCheck?.digits === onlyDigits(cep) && cepCheck.allowed === false && (
-                    <p className="text-xs text-red-400 mt-1">Ainda nao atendemos esse CEP.</p>
-                  )}
+                  <Input value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} data-testid="checkout-neighborhood" className="mt-1" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div><Label>Complemento</Label><Input value={complement} onChange={(e) => setComplement(e.target.value)} className="mt-1" /></div>

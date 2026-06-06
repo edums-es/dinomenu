@@ -108,11 +108,11 @@ export default function LoginPage() {
     <main className="login-page">
       <section className="login-brand-panel">
         <div className="login-panel-glow" />
-        <div className="login-logo" aria-label="EG Delivery">
+        <div className="login-logo" aria-label="Dino Menu">
           <img src="/logoeg.png" alt="" />
           <span>
-            <strong>EG Delivery</strong>
-            <small>by Easy Growth</small>
+            <strong>Dino Menu</strong>
+            <small>Cardapio digital</small>
           </span>
         </div>
 

@@ -30,6 +30,66 @@ function hexRgba(hex, alpha = 0.18) {
 const DAY_LABELS = {mon:"Segunda",tue:"Terça",wed:"Quarta",thu:"Quinta",fri:"Sexta",sat:"Sábado",sun:"Domingo"};
 
 /* ── Sub-components ── */
+const LOCATION_CACHE_KEY = "dino-menu-customer-region";
+const LOCATION_CACHE_TTL = 24 * 60 * 60 * 1000;
+
+function formatRegion(address = {}) {
+  const neighborhood = address.suburb || address.neighbourhood || address.quarter || address.city_district;
+  const city = address.city || address.town || address.municipality || address.village;
+  const state = address.state_code || address["ISO3166-2-lvl4"]?.split("-").pop() || address.state;
+  return [neighborhood, city && state ? `${city}/${state}` : city || state].filter(Boolean).join(", ");
+}
+
+function RegionalPromo({ accent, buttonTextColor }) {
+  const [region, setRegion] = useState("sua regiao");
+
+  useEffect(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem(LOCATION_CACHE_KEY) || "null");
+      if (cached?.region && Date.now() - cached.savedAt < LOCATION_CACHE_TTL) {
+        setRegion(cached.region);
+        return;
+      }
+    } catch {}
+
+    if (!navigator.geolocation) return;
+
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords }) => {
+        try {
+          const params = new URLSearchParams({
+            format: "jsonv2",
+            lat: String(coords.latitude),
+            lon: String(coords.longitude),
+            addressdetails: "1",
+            zoom: "18",
+          });
+          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params}`, {
+            headers: { "Accept-Language": "pt-BR" },
+          });
+          if (!response.ok) return;
+          const nextRegion = formatRegion((await response.json()).address);
+          if (!nextRegion) return;
+          setRegion(nextRegion);
+          localStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify({ region: nextRegion, savedAt: Date.now() }));
+        } catch {}
+      },
+      () => {},
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: LOCATION_CACHE_TTL },
+    );
+  }, []);
+
+  return (
+    <div
+      className="px-4 py-3 text-center text-xs font-semibold leading-5"
+      style={{ background: accent, color: buttonTextColor }}
+      data-testid="regional-promo"
+    >
+      Novidades exclusivas na regiao ({region}). Aproveite as promocoes por tempo limitado.
+    </div>
+  );
+}
+
 function ReviewsTab({ slug, reviews, summary, accent, textColor = "#FFFFFF", mutedColor = "#A7A7A7", buttonTextColor = "#04110C" }) {
   const [list, setList] = useState(reviews);
   const [name, setName] = useState(""); const [rating, setRating] = useState(5); const [comment, setComment] = useState("");
@@ -123,6 +183,7 @@ function MenuContent({ data, slug }) {
 
   return (
     <div className="eg-menu w-full max-w-md mx-auto min-h-screen relative pb-32" style={{background:"#0A0A0A", color:textColor}}>
+      <RegionalPromo accent={accent} buttonTextColor={buttonTextColor} />
 
       {/* Cover */}
       <div className="relative w-full h-56 overflow-hidden">
@@ -372,17 +433,11 @@ function MenuContent({ data, slug }) {
       <ProductDrawer product={selectedProduct} open={!!selectedProduct} onOpenChange={o => !o && setSelectedProduct(null)} onAdd={addItem} themeVars={themeVars}/>
       <CartSheet open={cartOpen} onOpenChange={setCartOpen} restaurant={restaurant} slug={slug}/>
 
-      {/* Easy Growth footer */}
+      {/* Dino Menu footer */}
       <div style={{textAlign:"center",padding:"16px 0 24px",borderTop:"1px solid #1a1a1a",marginTop:8}}>
-        <a href="https://www.instagram.com/easygrowtth/" target="_blank" rel="noreferrer"
-          style={{display:"inline-flex",alignItems:"center",gap:6,textDecoration:"none",opacity:.5,transition:"opacity .2s"}}
-          onMouseEnter={e=>e.currentTarget.style.opacity="1"}
-          onMouseLeave={e=>e.currentTarget.style.opacity=".5"}>
-          <img src="/logoeg.png" alt="Easy Growth" style={{height:30,width:"auto"}}/>
-          <span style={{fontSize:14,fontWeight:600,fontFamily:"Manrope,sans-serif",color:"#ccc"}}>
-            Desenvolvido pela <span style={{color:"#31f199"}}>Easy Growth</span>
-          </span>
-        </a>
+        <span style={{fontSize:14,fontWeight:600,fontFamily:"Manrope,sans-serif",color:"#777"}}>
+          Cardapio digital por <span style={{color:accent}}>Dino Menu</span>
+        </span>
       </div>
     </div>
   );
@@ -400,7 +455,7 @@ export default function MenuPage() {
         const restaurant = res.data.restaurant;
         cacheRestaurant(slug, restaurant);
         const title = `${restaurant.name} - Cardapio`;
-        const description = restaurant.tagline || restaurant.description || "Cardapio digital EG Delivery";
+        const description = restaurant.tagline || restaurant.description || "Cardapio digital Dino Menu";
         document.title = title;
         [
           ["description", description],

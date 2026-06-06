@@ -252,7 +252,7 @@ class PrintService extends EventEmitter {
 
   async testPrint() {
     const text = [
-      "EG Delivery",
+      "Dino Menu",
       "Teste de impressao",
       "------------------------------",
       `Data: ${new Date().toLocaleString("pt-BR")}`,

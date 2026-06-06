@@ -37,6 +37,7 @@ async def get_restaurant(user=Depends(require_restaurant)):
 @router.put("/restaurant")
 async def update_restaurant(settings: RestaurantSettings, user=Depends(require_restaurant)):
     updates = {k: v for k, v in settings.model_dump().items() if v is not None}
+    updates["delivery_fee_mode"] = "fixed"
     updates["updated_at"] = now_iso()
     await db.restaurants.update_one({"id": rid(user)}, {"$set": updates})
     r = await db.restaurants.find_one({"id": rid(user)}, {"_id": 0})

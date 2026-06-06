@@ -1,6 +1,6 @@
 {
-  "name": "EG Delivery",
-  "short_name": "EG Delivery",
+  "name": "Dino Menu",
+  "short_name": "Dino Menu",
   "description": "Sistema de gestao de delivery",
   "start_url": "/",
   "display": "standalone",

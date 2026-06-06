@@ -1,11 +1,11 @@
-# Arquitetura do EG Delivery
+# Arquitetura do Dino Menu
 
-Este documento explica como o EG Delivery funciona hoje. Ele foi escrito para
+Este documento explica como o Dino Menu funciona hoje. Ele foi escrito para
 servir como ponto de entrada para uma pessoa desenvolvedora nova no projeto.
 
 ## 1. Visao geral
 
-O EG Delivery e uma plataforma SaaS multi-restaurante. Cada restaurante possui
+O Dino Menu e uma plataforma SaaS multi-restaurante. Cada restaurante possui
 cardapio publico, painel administrativo, pedidos, configuracoes e integracoes
 isoladas por `restaurant_id`.
 
@@ -475,7 +475,7 @@ sao tentadas no maximo cinco vezes.
 
 O painel baixa um ZIP personalizado contendo:
 
-- `EG Delivery Impressora Setup.exe`;
+- `Dino Menu Impressora Setup.exe`;
 - configuracao com API e token da loja;
 - script de instalacao;
 - instrucoes.
@@ -719,7 +719,7 @@ REACT_APP_BACKEND_URL
 6. Configurar DNS, HTTPS e proxy de WebSocket.
 7. Configurar Evolution API/Kirago.
 8. Configurar webhook publico da OpenPix.
-9. Garantir que `backend/installers/EG Delivery Impressora Setup.exe` esteja no
+9. Garantir que `backend/installers/Dino Menu Impressora Setup.exe` esteja no
    build do backend.
 10. Verificar logs de startup e criacao dos indices MongoDB.
 11. Fazer backup dos volumes MongoDB, uploads e instancias WhatsApp.

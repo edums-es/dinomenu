@@ -47,7 +47,7 @@ def _find_windows_setup() -> Optional[Path]:
     matches = []
     for folder in candidates:
         if folder.exists():
-            matches.extend(folder.glob("EG Delivery Impressora Setup*.exe"))
+            matches.extend(folder.glob("Dino Menu Impressora Setup*.exe"))
     matches = [p for p in matches if p.exists()]
     if not matches:
         return None
@@ -99,7 +99,7 @@ def _receipt_lines(order: dict, restaurant: dict) -> list[str]:
     items = order.get("items") or []
 
     lines = [
-        _clean(restaurant.get("name"), "EG Delivery"),
+        _clean(restaurant.get("name"), "Dino Menu"),
         f"Pedido #{order.get('order_number', '')}",
         _line(),
         f"Cliente: {_clean(customer.get('name'), 'Cliente')}",
@@ -168,7 +168,7 @@ async def build_print_payload(order: dict) -> dict:
     return {
         "format": "text",
         "encoding": "utf-8",
-        "restaurant_name": restaurant.get("name", "EG Delivery"),
+        "restaurant_name": restaurant.get("name", "Dino Menu"),
         "order_id": order.get("id"),
         "order_number": order.get("order_number"),
         "copies": max(1, min(int(restaurant.get("printer_copies") or 1), 5)),
@@ -286,37 +286,37 @@ async def download_print_agent(request: Request, user=Depends(require_restaurant
     if not setup_exe:
         raise HTTPException(
             500,
-            "Instalador Windows nao encontrado no servidor. Gere print-agent/dist/EG Delivery Impressora Setup.exe antes do deploy.",
+            "Instalador Windows nao encontrado no servidor. Gere print-agent/dist/Dino Menu Impressora Setup.exe antes do deploy.",
         )
 
     install_bat = """@echo off
-title Instalar EG Delivery Impressora
-set "APPDATA_DIR=%APPDATA%\\EG Delivery Impressora"
+title Instalar Dino Menu Impressora
+set "APPDATA_DIR=%APPDATA%\\Dino Menu Impressora"
 mkdir "%APPDATA_DIR%" >nul 2>nul
 copy /Y "%~dp0config.egdelivery.json" "%APPDATA_DIR%\\config.json" >nul
-start "" /wait "%~dp0EG Delivery Impressora Setup.exe"
+start "" /wait "%~dp0Dino Menu Impressora Setup.exe"
 echo.
-echo EG Delivery Impressora instalado e vinculado a esta loja.
+echo Dino Menu Impressora instalado e vinculado a esta loja.
 pause
 """
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        z.write(setup_exe, "EG Delivery Impressora Setup.exe")
+        z.write(setup_exe, "Dino Menu Impressora Setup.exe")
         z.writestr("config.egdelivery.json", json.dumps(config, indent=2, ensure_ascii=False))
-        z.writestr("Instalar EG Delivery Impressora.bat", install_bat)
+        z.writestr("Instalar Dino Menu Impressora.bat", install_bat)
         z.writestr("LEIA-ME-PRIMEIRO.txt", (
-            "EG Delivery - Instalador da Impressora\n\n"
+            "Dino Menu - Instalador da Impressora\n\n"
             "1. Extraia este ZIP no computador da loja conectado a impressora.\n"
-            "2. De dois cliques em: Instalar EG Delivery Impressora.bat\n"
+            "2. De dois cliques em: Instalar Dino Menu Impressora.bat\n"
             "3. Confirme a instalacao do programa.\n"
-            "4. Pronto. O icone do EG Delivery ficara perto do relogio do Windows.\n\n"
+            "4. Pronto. O icone do Dino Menu ficara perto do relogio do Windows.\n\n"
             "Dentro do programa, use Testar impressao para conferir a impressora.\n"
             "Para suporte, abra Logs e suporte no icone da bandeja.\n"
         ))
     buf.seek(0)
 
-    headers = {"Content-Disposition": 'attachment; filename="eg-delivery-impressora-windows.zip"'}
+    headers = {"Content-Disposition": 'attachment; filename="dino-menu-impressora-windows.zip"'}
     return StreamingResponse(buf, media_type="application/zip", headers=headers)
 
 

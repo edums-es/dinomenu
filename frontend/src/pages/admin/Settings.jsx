@@ -12,7 +12,7 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from "@/components/ui/select";
 import ImageUpload from "@/components/admin/ImageUpload";
-import { Loader2, Plus, X, Save, Copy, Check, Printer, RefreshCw, KeyRound, Activity, Download, MonitorDown } from "lucide-react";
+import { Loader2, Save, Copy, Check, Printer, RefreshCw, KeyRound, Activity, Download, MonitorDown } from "lucide-react";
 import { API } from "@/lib/api";
 
 const PAYMENT_OPTIONS = ["Pix", "Dinheiro", "Cartão de crédito", "Cartão de débito", "Vale refeição"];
@@ -37,10 +37,6 @@ function WebhookUrlCopy({ url }) {
     </div>
   );
 }
-const uid = () => Math.random().toString(36).slice(2);
-const splitList = (value) => String(value || "").split(",").map((v) => v.trim()).filter(Boolean);
-const joinList = (value) => Array.isArray(value) ? value.join(", ") : (value || "");
-
 /* shared panel class */
 const PANEL = "bg-white dark:bg-[#111111] rounded-2xl border border-gray-200 dark:border-gray-700 p-5";
 
@@ -81,13 +77,7 @@ export default function Settings() {
         menu_muted_text_color: r.menu_muted_text_color,
         minimum_order: Number(r.minimum_order) || 0, average_delivery_time: r.average_delivery_time,
         accepts_delivery: r.accepts_delivery, accepts_pickup: r.accepts_pickup,
-        delivery_fee_mode: r.delivery_fee_mode, flat_delivery_fee: Number(r.flat_delivery_fee) || 0,
-        delivery_zones: (r.delivery_zones || []).map((z) => ({
-          ...z,
-          aliases: splitList(z.aliases),
-          cep_prefixes: splitList(z.cep_prefixes),
-          city_names: splitList(z.city_names),
-        })),
+        flat_delivery_fee: Number(r.flat_delivery_fee) || 0,
         payment_methods: r.payment_methods,
         pix_key: r.pix_key, pix_name: r.pix_name, openpix_app_id: r.openpix_app_id, opening_hours: r.opening_hours,
       };
@@ -104,13 +94,6 @@ export default function Settings() {
 
   const setHour = (day, patch) =>
     set({ opening_hours: { ...r.opening_hours, [day]: { ...r.opening_hours[day], ...patch } } });
-
-  const addZone = () =>
-    set({ delivery_zones: [...(r.delivery_zones || []), { id: uid(), neighborhood: "", fee: 0, active: true, aliases: "", city_names: "", cep_prefixes: "" }] });
-  const updZone = (id, patch) =>
-    set({ delivery_zones: r.delivery_zones.map((z) => z.id === id ? { ...z, ...patch } : z) });
-  const delZone = (id) =>
-    set({ delivery_zones: r.delivery_zones.filter((z) => z.id !== id) });
 
   const savePrinting = async () => {
     setSavingPrinting(true);
@@ -378,65 +361,15 @@ export default function Settings() {
             </div>
           </div>
           <div>
-            <Label className="dark:text-gray-200">Modelo de taxa de entrega</Label>
-            <Select value={r.delivery_fee_mode || "fixed"} onValueChange={(v) => set({ delivery_fee_mode: v })}>
-              <SelectTrigger className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white" data-testid="delivery-mode">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
-                <SelectItem value="fixed">Taxa fixa</SelectItem>
-                <SelectItem value="neighborhood">Por bairro</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label className="dark:text-gray-200">Taxa fixa de entrega (R$)</Label>
+            <Input type="number" value={r.flat_delivery_fee || 0}
+              onChange={(e) => set({ flat_delivery_fee: e.target.value })}
+              data-testid="flat-delivery-fee"
+              className="mt-1 w-40 dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+              Esta taxa sera aplicada a todas as entregas, sem filtro por cidade, bairro ou regiao.
+            </p>
           </div>
-          {r.delivery_fee_mode === "fixed" ? (
-            <div>
-              <Label className="dark:text-gray-200">Taxa fixa (R$)</Label>
-              <Input type="number" value={r.flat_delivery_fee || 0}
-                onChange={(e) => set({ flat_delivery_fee: e.target.value })}
-                className="mt-1 w-40 dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
-            </div>
-          ) : (
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <Label className="dark:text-gray-200">Regioes atendidas</Label>
-                <Button size="sm" variant="outline" onClick={addZone} data-testid="add-zone"
-                  className="dark:border-gray-600 dark:text-gray-200">
-                  <Plus className="w-3 h-3 mr-1" /> Regiao
-                </Button>
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                Cadastre uma regiao comercial e informe como ela aparece no ViaCEP: bairros/termos, municipio e/ou prefixos de CEP.
-              </p>
-              <div className="space-y-2">
-                {(r.delivery_zones || []).map((z) => (
-                  <div key={z.id} className="grid grid-cols-12 gap-2 items-center" data-testid={`zone-${z.id}`}>
-                    <Input value={z.neighborhood} onChange={(e) => updZone(z.id, { neighborhood: e.target.value })}
-                      placeholder="Regiao: Nova Almeida"
-                      className="col-span-3 dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
-                    <Input value={joinList(z.aliases)} onChange={(e) => updZone(z.id, { aliases: e.target.value })}
-                      placeholder="Bairros/termos: Serramar, Parque Jacaraipe"
-                      className="col-span-3 dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
-                    <Input value={joinList(z.city_names)} onChange={(e) => updZone(z.id, { city_names: e.target.value })}
-                      placeholder="Municipio: Serra"
-                      className="col-span-2 dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
-                    <Input value={joinList(z.cep_prefixes)} onChange={(e) => updZone(z.id, { cep_prefixes: e.target.value })}
-                      placeholder="CEPs: 29182"
-                      className="col-span-2 dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
-                    <Input type="number" value={z.fee} onChange={(e) => updZone(z.id, { fee: Number(e.target.value) })}
-                      placeholder="R$" className="col-span-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
-                    <div className="col-span-1 flex items-center justify-end gap-2">
-                      <Switch checked={z.active} onCheckedChange={(v) => updZone(z.id, { active: v })} />
-                      <Button size="icon" variant="ghost" onClick={() => delZone(z.id)}
-                        className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 shrink-0">
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </TabsContent>
 
         {/* ── Pagamento ── */}
@@ -615,7 +548,7 @@ export default function Settings() {
                   <div>
                     <h3 className="font-semibold text-gray-900 dark:text-white">Instalador Windows da impressora</h3>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      Baixe no computador da loja, instale o app e deixe o icone do EG Delivery ativo perto do relogio do Windows.
+                      Baixe no computador da loja, instale o app e deixe o icone do Dino Menu ativo perto do relogio do Windows.
                     </p>
                   </div>
                 </div>
@@ -634,7 +567,7 @@ export default function Settings() {
               <div className="grid md:grid-cols-4 gap-3 mt-4">
                 {[
                   ["1", "Baixe e extraia o pacote no computador da loja."],
-                  ["2", "De dois cliques em Instalar EG Delivery Impressora."],
+                  ["2", "De dois cliques em Instalar Dino Menu Impressora."],
                   ["3", "Finalize a instalacao e mantenha o app aberto na bandeja."],
                   ["4", "Use Testar impressao para conferir a impressora."],
                 ].map(([step, text]) => (

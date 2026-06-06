@@ -29,7 +29,7 @@ function renderState(state = {}) {
   els.statusDot.className = `status-dot ${connected ? "ok" : hasError ? "error" : ""}`;
   els.statusLabel.textContent = state.status || "Iniciando";
   els.statusHint.textContent = connected
-    ? "Conectado ao EG Delivery e aguardando pedidos aceitos."
+    ? "Conectado ao Dino Menu e aguardando pedidos aceitos."
     : hasError
       ? "Confira impressora, internet ou vínculo da loja."
       : "Aguardando conexão com a loja.";

@@ -92,17 +92,6 @@ class BannerIn(BaseModel):
     sort_order: int = 0
 
 
-# ---------- Delivery zone ----------
-class DeliveryZone(BaseModel):
-    id: str = Field(default_factory=new_id)
-    neighborhood: str
-    fee: float = 0.0
-    active: bool = True
-    aliases: List[str] = []
-    cep_prefixes: List[str] = []
-    city_names: List[str] = []
-
-
 # ---------- Opening hours ----------
 class DayHours(BaseModel):
     open: bool = False
@@ -132,9 +121,7 @@ class RestaurantSettings(BaseModel):
     accepts_pickup: Optional[bool] = None
     minimum_order: Optional[float] = None
     average_delivery_time: Optional[str] = None
-    delivery_fee_mode: Optional[Literal["fixed", "neighborhood"]] = None
     flat_delivery_fee: Optional[float] = None
-    delivery_zones: Optional[List[DeliveryZone]] = None
     payment_methods: Optional[List[str]] = None
     pix_key: Optional[str] = None
     pix_name: Optional[str] = None

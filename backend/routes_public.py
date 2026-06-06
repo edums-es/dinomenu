@@ -70,7 +70,7 @@ def _frontend_base_url(request: Request) -> str:
 @router.get("/restaurants/{slug}/share", response_class=HTMLResponse)
 async def restaurant_share_preview(slug: str, request: Request):
     r = await _get_restaurant_or_404(slug)
-    name = html.escape(r.get("name") or "EG Delivery")
+    name = html.escape(r.get("name") or "Dino Menu")
     description = html.escape(
         r.get("tagline")
         or r.get("description")
@@ -97,7 +97,7 @@ async def restaurant_share_preview(slug: str, request: Request):
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="600" />
     <meta property="og:url" content="{safe_url}" />
-    <meta property="og:site_name" content="EG Delivery" />
+    <meta property="og:site_name" content="Dino Menu" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="{name}" />
     <meta name="twitter:description" content="{description}" />
@@ -292,24 +292,6 @@ async def _expected_delivery_fee(restaurant: dict, order: OrderIn):
 
     if restaurant.get("accepts_delivery") is False:
         raise HTTPException(status_code=400, detail="Restaurante nao aceita entrega")
-
-    active_zones = [z for z in (restaurant.get("delivery_zones") or []) if z.get("active")]
-    zone = None
-    if active_zones:
-        cep_data = await _lookup_cep(order.address.cep if order.address else "")
-        cep_neighborhood = cep_data.get("bairro") or ""
-        zone = next((z for z in active_zones if _zone_matches_address(z, cep_data, cep_data.get("digits", ""))), None)
-        if not zone:
-            raise HTTPException(status_code=400, detail="Ainda nao atendemos esse CEP")
-        if order.address:
-            order.address.neighborhood = cep_neighborhood
-            if cep_data.get("logradouro"):
-                order.address.street = cep_data["logradouro"]
-
-    if restaurant.get("delivery_fee_mode") == "neighborhood":
-        if zone:
-            return float(zone.get("fee") or 0)
-        return 0.0
 
     return float(restaurant.get("flat_delivery_fee") or 0)
 

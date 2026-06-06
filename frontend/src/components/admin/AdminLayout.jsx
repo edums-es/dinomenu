@@ -105,7 +105,7 @@ export default function AdminLayout() {
           <span className="grid place-items-center w-8 h-8 rounded-lg bg-gray-900 dark:bg-gray-700 text-white">
             <UtensilsCrossed className="w-4 h-4" />
           </span>
-          <span className="font-display font-bold text-lg tracking-tight">EG Delivery</span>
+          <span className="font-display font-bold text-lg tracking-tight">Dino Menu</span>
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3 scrollbar-hide">

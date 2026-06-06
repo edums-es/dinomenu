@@ -30,7 +30,7 @@ function createWindow() {
     minWidth: 420,
     minHeight: 560,
     show: false,
-    title: "EG Delivery Impressora",
+    title: "Dino Menu Impressora",
     backgroundColor: "#050807",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -62,7 +62,7 @@ function updateTray() {
   if (!tray || !service) return;
   const state = service.snapshot();
   const connected = state.connected && !state.lastError;
-  tray.setToolTip(`EG Delivery Impressora\n${state.status}`);
+  tray.setToolTip(`Dino Menu Impressora\n${state.status}`);
   tray.setImage(trayIcon(connected ? "#19d98b" : "#f5c542"));
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: "Abrir status", click: () => createWindow() },
@@ -105,7 +105,7 @@ app.whenReady().then(async () => {
     notify("Pedido impresso", `Pedido #${job.order_number || job.id} enviado para a impressora.`);
   });
   service.on("error-log", (message) => {
-    notify("EG Delivery Impressora", message);
+    notify("Dino Menu Impressora", message);
   });
 
   updateTray();
