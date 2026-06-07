@@ -4,7 +4,7 @@
 Plataforma SaaS completa de cardápio digital e delivery para restaurantes. Cardápio público mobile-first (carrinho, checkout via WhatsApp + pedido interno), painel admin do restaurante (gestão completa) e super admin da plataforma.
 
 ## Stack
-- Backend: FastAPI + MongoDB (motor), JWT auth (Bearer), Emergent Object Storage
+- Backend: FastAPI + PostgreSQL (asyncpg/JSONB), JWT auth (Bearer), Emergent Object Storage
 - Frontend: React 19, Tailwind, shadcn/ui, recharts, lucide-react
 - Fonts: Outfit (display) + Manrope (público), Inter (admin). White-label via CSS vars --brand-primary/secondary
 

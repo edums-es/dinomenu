@@ -245,7 +245,7 @@ def is_restaurant_open(restaurant: dict) -> bool:
 
 
 def clean(doc: dict) -> dict:
-    """Strip Mongo _id for JSON responses."""
+    """Strip internal _id for JSON responses."""
     if doc and "_id" in doc:
         doc = {k: v for k, v in doc.items() if k != "_id"}
     return doc

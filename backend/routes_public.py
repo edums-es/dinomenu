@@ -333,7 +333,7 @@ async def _notify_new_order(restaurant: dict, order: dict, order_in=None, pix_vi
             customer_name = order_in.customer.name
             customer_phone = order_in.customer.phone
         else:
-            # Chamado do webhook/check-pix: le do documento MongoDB
+            # Chamado do webhook/check-pix: le do documento persistido
             raw_items = order.get("items") or []
             logger.info(f"[notify_order] items={len(raw_items)} subtotal={order.get('subtotal')} total={order.get('total')}")
             items_lines = []

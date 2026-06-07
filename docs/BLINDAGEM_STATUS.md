@@ -13,7 +13,7 @@ Atualizado em 6 de junho de 2026.
 - Quando `OPENPIX_WEBHOOK_SECRET` esta configurado, o webhook tambem exige assinatura HMAC.
 - CORS usa uma lista explicita de origens e producao rejeita configuracao curinga.
 - Producao exige `JWT_SECRET` forte e as chaves deixaram de ficar fixas no Docker Compose.
-- Autenticacao WebSocket voltou a localizar corretamente o usuario pelo `_id` do MongoDB.
+- Autenticacao WebSocket localiza corretamente o usuario pelo `_id` textual.
 - Uploads sao decodificados e reprocessados para bloquear arquivos falsos, metadados e imagens excessivas.
 
 ## Configuracao obrigatoria para producao

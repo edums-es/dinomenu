@@ -79,13 +79,15 @@ async def on_startup():
         auth.get_jwt_secret()
         if not cors_origins or "*" in cors_origins:
             raise RuntimeError("CORS_ORIGINS deve listar dominios explicitos em producao")
+    await client.connect()
     try:
         await seed()
         logger.info("Seed complete")
     except Exception as e:
         logger.error(f"Seed failed: {e}")
+        raise
 
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    client.close()
+    await client.close()

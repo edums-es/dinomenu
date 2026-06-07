@@ -12,8 +12,8 @@ isoladas por `restaurant_id`.
 Stack principal:
 
 - Frontend: React 19, React Router, Tailwind CSS, Radix UI e Axios.
-- Backend: Python 3.11, FastAPI, Pydantic e Motor.
-- Banco: MongoDB 7.
+- Backend: Python 3.11, FastAPI, Pydantic e asyncpg.
+- Banco: PostgreSQL 16 com documentos JSONB.
 - Tempo real: WebSocket mantido pelo proprio FastAPI.
 - Arquivos: Cloudinary em producao, com fallback local.
 - Frontend em producao: build estatico servido por Nginx.
@@ -25,7 +25,7 @@ Stack principal:
 Fluxo simplificado:
 
 ```text
-Cliente -> React /loja/:slug -> FastAPI /api/public -> MongoDB
+Cliente -> React /loja/:slug -> FastAPI /api/public -> PostgreSQL
                                       |
                                       +-> OpenPix
                                       +-> WhatsApp
@@ -66,7 +66,7 @@ confirmar o restaurante. Isso pode expor dados entre clientes.
 ### Identificadores e datas
 
 - Entidades de negocio usam UUID textual em `id`, criado por `new_id()`.
-- Usuarios usam `_id` nativo do MongoDB.
+- Usuarios usam `_id` textual gerado pela camada PostgreSQL.
 - Datas normalmente sao strings ISO UTC geradas por `now_iso()`.
 - A funcao `clean()` remove `_id` antes de retornar documentos pela API.
 
@@ -78,7 +78,7 @@ O ponto de entrada e `backend/server.py`. Ele:
 2. Registra todos os routers.
 3. Habilita CORS e compressao GZip.
 4. Executa `seed()` no startup.
-5. Cria indices MongoDB e o super admin inicial, caso necessario.
+5. Cria indices PostgreSQL e o super admin inicial, caso necessario.
 
 ## 3. Como funciona login
 
@@ -633,14 +633,14 @@ Pontos de atencao:
 
 `docker-compose.yml` sobe:
 
-- `mongo`: MongoDB 7 com volume persistente.
+- `postgres`: PostgreSQL 16 com volume persistente.
 - `evolution-api`: integracao WhatsApp com volume de instancias.
 - `backend`: FastAPI/Uvicorn na porta 8001.
 - `frontend`: build React servido por Nginx na porta 3000.
 
 Volumes:
 
-- `mongo_data`
+- `postgres_data`
 - `uploads_data`
 - `evolution_instances`
 
@@ -688,8 +688,7 @@ npm start
 Backend:
 
 ```text
-MONGO_URL
-DB_NAME
+DATABASE_URL
 JWT_SECRET
 ADMIN_EMAIL
 ADMIN_PASSWORD
@@ -721,8 +720,8 @@ REACT_APP_BACKEND_URL
 8. Configurar webhook publico da OpenPix.
 9. Garantir que `backend/installers/Dino Menu Impressora Setup.exe` esteja no
    build do backend.
-10. Verificar logs de startup e criacao dos indices MongoDB.
-11. Fazer backup dos volumes MongoDB, uploads e instancias WhatsApp.
+10. Verificar logs de startup e criacao dos indices PostgreSQL.
+11. Fazer backup do PostgreSQL, uploads e instancias WhatsApp.
 12. Testar pedido completo, pagamento, WhatsApp, WebSocket e impressao.
 
 ### Pontos de atencao do deploy atual
@@ -740,7 +739,7 @@ REACT_APP_BACKEND_URL
 
 ```text
 backend/server.py                 Inicializacao FastAPI e middleware
-backend/db.py                     Conexao MongoDB
+backend/db.py                     Adaptador PostgreSQL JSONB
 backend/models.py                 Modelos Pydantic e regras compartilhadas
 backend/auth.py                   Login, JWT e autorizacao
 backend/routes_public.py          Cardapio, pedido publico, rastreio e OpenPix

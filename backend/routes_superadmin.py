@@ -158,27 +158,24 @@ async def restaurant_revenue_chart(rid: str, user=Depends(SUPER)):
 
 @router.put("/users/{uid}")
 async def update_user(uid: str, body: dict, user=Depends(SUPER)):
-    from bson import ObjectId
     allowed = {"name", "email", "role", "is_active"}
     patch = {k: v for k, v in body.items() if k in allowed}
     patch["updated_at"] = now_iso()
-    await db.users.update_one({"_id": ObjectId(uid)}, {"$set": patch})
-    u = await db.users.find_one({"_id": ObjectId(uid)}, {"password_hash": 0})
+    await db.users.update_one({"_id": uid}, {"$set": patch})
+    u = await db.users.find_one({"_id": uid}, {"password_hash": 0})
     return {"id": str(u["_id"]), "email": u["email"], "name": u.get("name"), "role": u.get("role")}
 
 @router.delete("/users/{uid}")
 async def delete_user(uid: str, user=Depends(SUPER)):
-    from bson import ObjectId
-    await db.users.delete_one({"_id": ObjectId(uid)})
+    await db.users.delete_one({"_id": uid})
     return {"ok": True}
 
 @router.post("/users/{uid}/reset-password")
 async def reset_user_password(uid: str, body: dict, user=Depends(SUPER)):
-    from bson import ObjectId
     new_pw = body.get("password", "")
     if len(new_pw) < 6:
         raise HTTPException(400, "Senha deve ter ao menos 6 caracteres")
-    await db.users.update_one({"_id": ObjectId(uid)}, {"$set": {"password_hash": hash_password(new_pw)}})
+    await db.users.update_one({"_id": uid}, {"$set": {"password_hash": hash_password(new_pw)}})
     return {"ok": True}
 
 @router.get("/activity")

@@ -9,8 +9,7 @@ from fastapi import HTTPException
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
-os.environ.setdefault("MONGO_URL", "mongodb://localhost:27017")
-os.environ.setdefault("DB_NAME", "dinomenu_test")
+os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/dinomenu_test")
 
 from models import AddressInfo, CustomerInfo, OrderIn, OrderItemIn
 from routes_public import _expected_delivery_fee

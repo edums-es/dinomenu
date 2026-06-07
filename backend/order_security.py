@@ -3,7 +3,6 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
-from pymongo import ReturnDocument
 
 
 logger = logging.getLogger(__name__)
@@ -187,7 +186,6 @@ async def next_sequence(db, restaurant_id: str, sequence_type: str, collection_n
     sequence = await db.sequences.find_one_and_update(
         key,
         {"$inc": {"value": 1}},
-        return_document=ReturnDocument.AFTER,
     )
     return int(sequence["value"])
 

@@ -1,12 +1,9 @@
 """Authentication utilities and routes (JWT, email/password)."""
 import os
-import uuid
 from datetime import datetime, timezone, timedelta
 
 import bcrypt
 import jwt
-from bson import ObjectId
-from bson.errors import InvalidId
 from fastapi import APIRouter, Request, HTTPException, Depends
 from pydantic import BaseModel, EmailStr
 
@@ -73,13 +70,13 @@ async def get_current_user(request: Request) -> dict:
         payload = jwt.decode(token, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
         if payload.get("type") != "access":
             raise HTTPException(status_code=401, detail="Token inválido")
-        user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
+        user = await db.users.find_one({"_id": payload["sub"]})
         if not user:
             raise HTTPException(status_code=401, detail="Usuário não encontrado")
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Sessão expirada")
-    except (jwt.InvalidTokenError, InvalidId):
+    except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Token inválido")
 
 
@@ -175,7 +172,7 @@ async def verify_token_ws(token: str):
         user_id = payload.get("sub")
         if not user_id:
             return None
-        user = await db.users.find_one({"_id": ObjectId(user_id)}, {"password_hash": 0})
+        user = await db.users.find_one({"_id": user_id}, {"password_hash": 0})
         if user:
             user["id"] = str(user.pop("_id"))
         return user

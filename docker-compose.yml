@@ -1,12 +1,16 @@
 services:
-  mongo:
-    image: mongo:7
-    container_name: mariscodelivery-mongo
+  postgres:
+    image: postgres:16-alpine
+    container_name: dinomenu-postgres
     restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-dinomenu}
+      POSTGRES_USER: ${POSTGRES_USER:-dinomenu}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dinomenu}
     volumes:
-      - mongo_data:/data/db
+      - postgres_data:/var/lib/postgresql/data
     ports:
-      - "27017:27017"
+      - "${POSTGRES_PORT:-5432}:5432"
 
   evolution-api:
     image: atendai/evolution-api:v2.2.3
@@ -38,11 +42,10 @@ services:
     container_name: mariscodelivery-backend
     restart: unless-stopped
     depends_on:
-      - mongo
+      - postgres
       - evolution-api
     environment:
-      MONGO_URL: mongodb://mongo:27017
-      DB_NAME: ${DB_NAME:-egdelivery}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://dinomenu:dinomenu@postgres:5432/dinomenu}
       APP_ENV: ${APP_ENV:-development}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       UPLOAD_DIR: /app/uploads
@@ -70,6 +73,6 @@ services:
       - "3000:3000"
 
 volumes:
-  mongo_data:
+  postgres_data:
   uploads_data:
   evolution_instances:
