@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from "@/components/ui/select";
-import { Minus, Plus, Trash2, MessageCircle, ShoppingBag, ArrowLeft, Ticket, Check, Copy, QrCode } from "lucide-react";
+import { Minus, Plus, Trash2, MessageCircle, ShoppingBag, ArrowLeft, Ticket, Check, Copy, QrCode, Sparkles } from "lucide-react";
 import { maskPhone } from "@/lib/masks";
 import { useCart } from "@/context/CartContext";
 import api, { formatApiError } from "@/lib/api";
@@ -32,8 +32,8 @@ const maskCep = (value) => {
   const digits = onlyDigits(value).slice(0, 8);
   return digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
 };
-export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
-  const { items, updateQuantity, removeItem, subtotal, clearCart } = useCart();
+export default function CartSheet({ open, onOpenChange, restaurant, slug, products = [] }) {
+  const { items, addItem, updateQuantity, removeItem, subtotal, clearCart } = useCart();
   const [step, setStep] = useState("cart"); // cart | checkout | pix
   const [submitting, setSubmitting] = useState(false);
   const [pixCharge, setPixCharge] = useState(null);
@@ -46,6 +46,7 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
   // coupon
   const [couponInput, setCouponInput] = useState("");
   const [coupon, setCoupon] = useState(null);
+  const [downsell, setDownsell] = useState(null);
 
   // checkout fields
   const [name, setName] = useState("");
@@ -67,7 +68,18 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
     return Number(restaurant?.flat_delivery_fee) || 0;
   }, [type, coupon, restaurant?.flat_delivery_fee]);
 
-  const discount = coupon?.discount || 0;
+  const itemCount = items.reduce((totalItems, item) => totalItems + item.quantity, 0);
+  const quantityMinItems = Number(restaurant?.quantity_discount_min_items) || 0;
+  const quantityPercent = Math.min(Math.max(Number(restaurant?.quantity_discount_percent) || 0, 0), 100);
+  const quantityDiscount = quantityMinItems > 0 && itemCount >= quantityMinItems
+    ? Math.round(subtotal * quantityPercent) / 100
+    : 0;
+  const couponDiscount = coupon
+    ? coupon.discount_type === "percent"
+      ? Math.round(subtotal * Number(coupon.discount_value || 0)) / 100
+      : Number(coupon.discount_value || 0)
+    : 0;
+  const discount = Math.min(subtotal, couponDiscount + quantityDiscount);
   const total = Math.max(0, subtotal + deliveryFee - discount);
   const primary = restaurant?.primary_color || "#22E39B";
   const themeVars = {
@@ -77,6 +89,26 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
     "--menu-text": restaurant?.menu_text_color || "#FFFFFF",
     "--menu-muted": restaurant?.menu_muted_text_color || "#A7A7A7",
     "--menu-detail": restaurant?.secondary_color || primary,
+  };
+
+  const cartProductIds = new Set(items.map((item) => item.product.id));
+  const canQuickAdd = (product) => product?.is_available
+    && !(product.option_groups || []).some((group) => group.required || Number(group.min || 0) > 0);
+  const upsell = items
+    .map((item) => products.find((product) => product.id === item.product.upsell_product_id))
+    .find((product) => product && !cartProductIds.has(product.id) && canQuickAdd(product));
+
+  const addSuggestedProduct = (product) => {
+    const unitPrice = Number(product.promotional_price) > 0 ? Number(product.promotional_price) : Number(product.price) || 0;
+    addItem({ product, quantity: 1, selectedOptions: [], notes: "", unitPrice });
+    setDownsell(null);
+    toast.success(`${product.name} adicionado!`);
+  };
+
+  const removeWithDownsell = (item) => {
+    const alternative = products.find((product) => product.id === item.product.downsell_product_id);
+    setDownsell(alternative && canQuickAdd(alternative) && !cartProductIds.has(alternative.id) ? alternative : null);
+    removeItem(item.lineId);
   };
 
   // Polling: verifica a cada 4s se Pix foi pago (usa endpoint ativo que consulta OpenPix)
@@ -390,6 +422,23 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
           <div className="p-10 text-center text-gray-400">
             <ShoppingBag className="w-12 h-12 mx-auto mb-3 opacity-40" />
             <p>Seu carrinho está vazio.</p>
+            {downsell && (
+              <div className="mt-5 rounded-xl border border-white/10 bg-white/5 p-3 text-left">
+                <p className="text-xs font-bold uppercase tracking-wide" style={{color:"var(--brand-primary)"}}>Antes de ir, que tal?</p>
+                <div className="mt-2 flex items-center gap-3">
+                  {downsell.image_url && <img src={downsell.image_url} alt="" className="h-14 w-14 rounded-lg object-cover" />}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-white">{downsell.name}</p>
+                    <p className="text-xs brand-text">{brl(downsell.promotional_price || downsell.price)}</p>
+                  </div>
+                  <button type="button" onClick={() => addSuggestedProduct(downsell)}
+                    className="rounded-lg px-3 py-2 text-xs font-bold"
+                    style={{background:"var(--brand-primary)",color:"var(--brand-primary-foreground)"}}>
+                    Adicionar
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ) : step === "cart" ? (
           <div className="p-4 space-y-4">
@@ -404,7 +453,7 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
                   <p className="text-sm font-semibold brand-text mt-1">{brl(i.unitPrice * i.quantity)}</p>
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <button onClick={() => removeItem(i.lineId)} data-testid="cart-remove" className="text-gray-300 hover:text-red-500">
+                  <button onClick={() => removeWithDownsell(i)} data-testid="cart-remove" className="text-gray-300 hover:text-red-500">
                     <Trash2 className="w-4 h-4" />
                   </button>
                   <div className="flex items-center gap-2 rounded-full px-1.5 py-0.5" style={{border:"1px solid rgba(255,255,255,0.15)"}}>
@@ -415,6 +464,37 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
                 </div>
               </div>
             ))}
+
+            {quantityMinItems > 0 && quantityPercent > 0 && (
+              <div className="rounded-xl p-3 text-sm" style={{background:"var(--brand-secondary)",border:"1px solid var(--brand-primary)"}}>
+                <div className="flex items-center gap-2 font-semibold" style={{color:"var(--brand-primary)"}}>
+                  <Sparkles className="w-4 h-4" />
+                  {itemCount >= quantityMinItems
+                    ? `${quantityPercent}% de desconto liberado!`
+                    : `Adicione mais ${quantityMinItems - itemCount} ${quantityMinItems - itemCount === 1 ? "item" : "itens"} e ganhe ${quantityPercent}% de desconto`}
+                </div>
+              </div>
+            )}
+
+            {(downsell || upsell) && (
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide" style={{color:"var(--brand-primary)"}}>
+                  {downsell ? "Que tal uma opcao mais leve?" : "Combine com seu pedido"}
+                </p>
+                <div className="mt-2 flex items-center gap-3">
+                  {(downsell || upsell).image_url && <img src={(downsell || upsell).image_url} alt="" className="h-14 w-14 rounded-lg object-cover" />}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{(downsell || upsell).name}</p>
+                    <p className="text-xs brand-text">{brl((downsell || upsell).promotional_price || (downsell || upsell).price)}</p>
+                  </div>
+                  <button type="button" onClick={() => addSuggestedProduct(downsell || upsell)}
+                    className="rounded-lg px-3 py-2 text-xs font-bold"
+                    style={{background:"var(--brand-primary)",color:"var(--brand-primary-foreground)"}}>
+                    Adicionar
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* coupon */}
             <div className="flex gap-2 pt-2">
@@ -431,7 +511,8 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
 
             <div className="pt-3 space-y-1.5 text-sm" style={{borderTop:"1px solid rgba(255,255,255,0.1)"}}>
               <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{brl(subtotal)}</span></div>
-              {discount > 0 && <div className="flex justify-between text-green-600"><span>Desconto</span><span>-{brl(discount)}</span></div>}
+              {quantityDiscount > 0 && <div className="flex justify-between text-green-600"><span>Desconto por itens</span><span>-{brl(quantityDiscount)}</span></div>}
+              {couponDiscount > 0 && <div className="flex justify-between text-green-600"><span>Cupom</span><span>-{brl(couponDiscount)}</span></div>}
               <div className="flex justify-between font-display font-bold text-base"><span>Total</span><span>{brl(subtotal - discount)}</span></div>
             </div>
 
@@ -516,7 +597,8 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug }) {
             <div className="pt-3 space-y-1.5 text-sm" style={{borderTop:"1px solid rgba(255,255,255,0.1)"}}>
               <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{brl(subtotal)}</span></div>
               {type === "delivery" && <div className="flex justify-between text-gray-500"><span>Entrega</span><span>{brl(deliveryFee)}</span></div>}
-              {discount > 0 && <div className="flex justify-between text-green-600"><span>Desconto</span><span>-{brl(discount)}</span></div>}
+              {quantityDiscount > 0 && <div className="flex justify-between text-green-600"><span>Desconto por itens</span><span>-{brl(quantityDiscount)}</span></div>}
+              {couponDiscount > 0 && <div className="flex justify-between text-green-600"><span>Cupom</span><span>-{brl(couponDiscount)}</span></div>}
               <div className="flex justify-between font-display font-bold text-lg"><span>Total</span><span>{brl(total)}</span></div>
             </div>
 

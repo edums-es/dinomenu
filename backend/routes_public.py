@@ -301,6 +301,25 @@ async def validate_coupon(slug: str, payload: dict):
     }
 
 
+@router.post("/restaurants/{slug}/cart-preview")
+async def cart_preview(slug: str, payload: dict):
+    r = await _get_restaurant_or_404(slug)
+    item_count = max(int(payload.get("item_count") or 0), 0)
+    subtotal = max(float(payload.get("subtotal") or 0), 0)
+    min_items = max(int(r.get("quantity_discount_min_items") or 0), 0)
+    percent = min(max(float(r.get("quantity_discount_percent") or 0), 0), 100)
+    remaining = max(min_items - item_count, 0) if min_items else 0
+    discount = round(subtotal * percent / 100, 2) if min_items and item_count >= min_items else 0
+    return {
+        "item_count": item_count,
+        "min_items": min_items,
+        "remaining_items": remaining,
+        "discount_percent": percent,
+        "discount": discount,
+        "active": discount > 0,
+    }
+
+
 def brl_fmt(value):
     try:
         return f"R$ {float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")

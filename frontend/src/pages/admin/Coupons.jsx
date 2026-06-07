@@ -83,18 +83,25 @@ export default function Coupons() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Tipo</Label>
-                <Select value={form.discount_type} onValueChange={(v) => setForm({ ...form, discount_type: v })}>
+                <Select
+                  value={form.free_delivery ? "free_delivery" : form.discount_type}
+                  onValueChange={(v) => setForm({
+                    ...form,
+                    free_delivery: v === "free_delivery",
+                    discount_type: v === "free_delivery" ? "fixed" : v,
+                    discount_value: v === "free_delivery" ? 0 : form.discount_value,
+                  })}
+                >
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="percent">Percentual</SelectItem><SelectItem value="fixed">Valor fixo</SelectItem></SelectContent>
+                  <SelectContent><SelectItem value="percent">Percentual</SelectItem><SelectItem value="fixed">Valor fixo</SelectItem><SelectItem value="free_delivery">Frete grátis</SelectItem></SelectContent>
                 </Select>
               </div>
-              <div><Label>Valor</Label><Input type="number" value={form.discount_value} onChange={(e) => setForm({ ...form, discount_value: e.target.value })} className="mt-1" /></div>
+              <div><Label>Valor</Label><Input type="number" disabled={form.free_delivery} value={form.discount_value} onChange={(e) => setForm({ ...form, discount_value: e.target.value })} className="mt-1" /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Pedido mínimo</Label><Input type="number" value={form.min_order} onChange={(e) => setForm({ ...form, min_order: e.target.value })} className="mt-1" /></div>
               <div><Label>Limite de uso</Label><Input type="number" value={form.usage_limit} onChange={(e) => setForm({ ...form, usage_limit: e.target.value })} placeholder="∞" className="mt-1" /></div>
             </div>
-            <div className="flex items-center justify-between"><Label>Frete grátis</Label><Switch checked={form.free_delivery} onCheckedChange={(v) => setForm({ ...form, free_delivery: v })} /></div>
             <div className="flex items-center justify-between"><Label>Ativo</Label><Switch checked={form.is_active} onCheckedChange={(v) => setForm({ ...form, is_active: v })} /></div>
           </div>
           <DialogFooter><Button onClick={save} data-testid="save-coupon" className="bg-[#111827] rounded-xl">Salvar</Button></DialogFooter>

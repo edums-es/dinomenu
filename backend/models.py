@@ -66,6 +66,8 @@ class ProductIn(BaseModel):
     track_stock: bool = False
     stock_quantity: int = 0
     low_stock_threshold: int = 5
+    upsell_product_id: Optional[str] = None
+    downsell_product_id: Optional[str] = None
 
 
 # ---------- Coupon ----------
@@ -122,6 +124,8 @@ class RestaurantSettings(BaseModel):
     minimum_order: Optional[float] = None
     average_delivery_time: Optional[str] = None
     flat_delivery_fee: Optional[float] = None
+    quantity_discount_min_items: Optional[int] = None
+    quantity_discount_percent: Optional[float] = None
     payment_methods: Optional[List[str]] = None
     pix_key: Optional[str] = None
     pix_name: Optional[str] = None

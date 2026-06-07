@@ -117,6 +117,30 @@ def test_calculator_ignores_client_prices_and_validates_options():
     assert result["subtotal"] == 50.0
 
 
+def test_calculator_applies_quantity_discount_from_restaurant_settings():
+    product = sample_product(track_stock=False, option_groups=[])
+    db = SimpleNamespace(
+        products=FakeCollection([product]),
+        coupons=FakeCollection([]),
+    )
+    item = requested_item(quantity=3)
+    item.options = []
+
+    result = asyncio.run(calculate_order(
+        db,
+        {
+            "id": "restaurant-a",
+            "quantity_discount_min_items": 3,
+            "quantity_discount_percent": 10,
+        },
+        [item],
+    ))
+
+    assert result["subtotal"] == 60.0
+    assert result["quantity_discount"] == 6.0
+    assert result["discount"] == 6.0
+
+
 def test_calculator_does_not_accept_product_from_another_restaurant():
     db = SimpleNamespace(
         products=FakeCollection([sample_product(restaurant_id="restaurant-b")]),

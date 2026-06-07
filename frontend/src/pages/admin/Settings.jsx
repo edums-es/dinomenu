@@ -78,6 +78,8 @@ export default function Settings() {
         minimum_order: Number(r.minimum_order) || 0, average_delivery_time: r.average_delivery_time,
         accepts_delivery: r.accepts_delivery, accepts_pickup: r.accepts_pickup,
         flat_delivery_fee: Number(r.flat_delivery_fee) || 0,
+        quantity_discount_min_items: Number(r.quantity_discount_min_items) || 0,
+        quantity_discount_percent: Number(r.quantity_discount_percent) || 0,
         payment_methods: r.payment_methods,
         pix_key: r.pix_key, pix_name: r.pix_name, openpix_app_id: r.openpix_app_id, opening_hours: r.opening_hours,
       };
@@ -369,6 +371,26 @@ export default function Settings() {
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
               Esta taxa sera aplicada a todas as entregas, sem filtro por cidade, bairro ou regiao.
             </p>
+          </div>
+          <div className="border-t border-gray-100 dark:border-gray-700 pt-4">
+            <p className="font-semibold text-sm dark:text-white">Desconto por quantidade</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-3">
+              Incentive o cliente a adicionar mais itens ao pedido.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="dark:text-gray-200">A partir de quantos itens</Label>
+                <Input type="number" min="0" value={r.quantity_discount_min_items || 0}
+                  onChange={(e) => set({ quantity_discount_min_items: e.target.value })}
+                  className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
+              </div>
+              <div>
+                <Label className="dark:text-gray-200">Desconto (%)</Label>
+                <Input type="number" min="0" max="100" step="0.1" value={r.quantity_discount_percent || 0}
+                  onChange={(e) => set({ quantity_discount_percent: e.target.value })}
+                  className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
+              </div>
+            </div>
           </div>
         </TabsContent>
 

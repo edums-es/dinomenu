@@ -19,7 +19,7 @@ import { Plus, Pencil, Trash2, UtensilsCrossed, X, Download, Upload, Search, Sli
 const EMPTY = {
   name: "", description: "", image_url: null, price: 0, promotional_price: null,
   category_id: "", is_available: true, is_featured: false, is_best_seller: false,
-  sort_order: 0, option_groups: [],
+  sort_order: 0, option_groups: [], upsell_product_id: null, downsell_product_id: null,
 };
 
 const uid = () => Math.random().toString(36).slice(2);
@@ -87,6 +87,8 @@ export default function Products() {
         track_stock: Boolean(form.track_stock),
         stock_quantity: Number(form.stock_quantity) || 0,
         low_stock_threshold: Number(form.low_stock_threshold) || 5,
+        upsell_product_id: form.upsell_product_id || null,
+        downsell_product_id: form.downsell_product_id || null,
       };
       if (editId) await api.put(`/admin/products/${editId}`, payload);
       else await api.post("/admin/products", payload);
@@ -271,6 +273,31 @@ export default function Products() {
               <label className="flex items-center gap-2 text-sm"><Switch checked={form.is_available} onCheckedChange={(v) => setForm({ ...form, is_available: v })} /> Disponível</label>
               <label className="flex items-center gap-2 text-sm"><Switch checked={form.is_featured} onCheckedChange={(v) => setForm({ ...form, is_featured: v })} /> Destaque</label>
               <label className="flex items-center gap-2 text-sm"><Switch checked={form.is_best_seller} onCheckedChange={(v) => setForm({ ...form, is_best_seller: v })} /> Mais vendido</label>
+            </div>
+
+            <div className="border-t pt-4 space-y-3">
+              <div>
+                <Label>Upsell no carrinho</Label>
+                <p className="text-xs text-gray-400 mb-1">Produto sugerido quando este item estiver no carrinho.</p>
+                <Select value={form.upsell_product_id || "__none"} onValueChange={(v) => setForm({ ...form, upsell_product_id: v === "__none" ? null : v })}>
+                  <SelectTrigger><SelectValue placeholder="Sem sugestao" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">Sem sugestao</SelectItem>
+                    {items.filter((p) => p.id !== editId).map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Downsell ao remover</Label>
+                <p className="text-xs text-gray-400 mb-1">Alternativa mais acessivel exibida quando o cliente remover este item.</p>
+                <Select value={form.downsell_product_id || "__none"} onValueChange={(v) => setForm({ ...form, downsell_product_id: v === "__none" ? null : v })}>
+                  <SelectTrigger><SelectValue placeholder="Sem alternativa" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">Sem alternativa</SelectItem>
+                    {items.filter((p) => p.id !== editId).map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             {/* Option groups */}

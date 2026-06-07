@@ -101,6 +101,7 @@ function RegionalPromo({ accent, buttonTextColor }) {
         background: status === "ready" ? hexRgba(accent, 0.88) : "rgba(0,0,0,.68)",
         borderColor: status === "ready" ? accent : "rgba(255,255,255,.22)",
         color: status === "ready" ? buttonTextColor : "#fff",
+        boxShadow: status === "ready" ? `0 6px 22px ${hexRgba(accent, 0.42)}` : "0 6px 18px rgba(0,0,0,.3)",
       }}
       data-testid="regional-promo"
     >
@@ -109,7 +110,7 @@ function RegionalPromo({ accent, buttonTextColor }) {
           ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
           : <MapPin className="h-3.5 w-3.5 shrink-0" />}
         <span className="truncate text-[11px] font-bold">
-          {status === "ready" ? `Ofertas para ${label}` : status === "loading" ? "Identificando sua regiao..." : "Usar minha localizacao"}
+          {status === "ready" ? `Ofertas Exclusivas em ${label}` : status === "loading" ? "Identificando sua regiao..." : "Usar minha localizacao"}
         </span>
       </span>
     </button>
@@ -456,7 +457,7 @@ function MenuContent({ data, slug }) {
       )}
 
       <ProductDrawer product={selectedProduct} open={!!selectedProduct} onOpenChange={o => !o && setSelectedProduct(null)} onAdd={addItem} themeVars={themeVars}/>
-      <CartSheet open={cartOpen} onOpenChange={setCartOpen} restaurant={restaurant} slug={slug}/>
+      <CartSheet open={cartOpen} onOpenChange={setCartOpen} restaurant={restaurant} slug={slug} products={products}/>
 
       {/* Dino Menu footer */}
       <div style={{textAlign:"center",padding:"16px 0 24px",borderTop:"1px solid #1a1a1a",marginTop:8}}>

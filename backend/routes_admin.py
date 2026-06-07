@@ -114,6 +114,22 @@ async def delete_category(cid: str, user=Depends(require_restaurant)):
 
 
 # ---------- products ----------
+async def validate_product_suggestions(data: ProductIn, restaurant_id: str, product_id: str = None):
+    suggestion_ids = {
+        value for value in (data.upsell_product_id, data.downsell_product_id) if value
+    }
+    if product_id and product_id in suggestion_ids:
+        raise HTTPException(status_code=400, detail="O produto nao pode sugerir ele mesmo")
+    if not suggestion_ids:
+        return
+    suggestions = await db.products.find(
+        {"restaurant_id": restaurant_id, "id": {"$in": list(suggestion_ids)}},
+        {"id": 1, "_id": 0},
+    ).to_list(len(suggestion_ids))
+    if {product["id"] for product in suggestions} != suggestion_ids:
+        raise HTTPException(status_code=400, detail="Produto sugerido invalido")
+
+
 @router.get("/products")
 async def list_products(user=Depends(require_restaurant)):
     return await db.products.find({"restaurant_id": rid(user)}, {"_id": 0}).sort("sort_order", 1).to_list(1000)
@@ -121,6 +137,7 @@ async def list_products(user=Depends(require_restaurant)):
 
 @router.post("/products")
 async def create_product(data: ProductIn, user=Depends(require_restaurant)):
+    await validate_product_suggestions(data, rid(user))
     doc = data.model_dump()
     doc.update({"id": new_id(), "restaurant_id": rid(user), "created_at": now_iso()})
     await db.products.insert_one(doc)
@@ -129,6 +146,7 @@ async def create_product(data: ProductIn, user=Depends(require_restaurant)):
 
 @router.put("/products/{pid}")
 async def update_product(pid: str, data: ProductIn, user=Depends(require_restaurant)):
+    await validate_product_suggestions(data, rid(user), pid)
     res = await db.products.update_one(
         {"id": pid, "restaurant_id": rid(user)}, {"$set": data.model_dump()})
     if res.matched_count == 0:

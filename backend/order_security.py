@@ -41,6 +41,7 @@ async def calculate_order(db, restaurant: dict, requested_items, coupon_code=Non
     canonical_items = []
     reservations = []
     subtotal = 0.0
+    item_count = 0
 
     for requested in requested_items:
         quantity = int(requested.quantity)
@@ -104,6 +105,7 @@ async def calculate_order(db, restaurant: dict, requested_items, coupon_code=Non
 
         item_total = money((base_price + options_total) * quantity)
         subtotal = money(subtotal + item_total)
+        item_count += quantity
         canonical_items.append({
             "product_id": product["id"],
             "product_name": product["name"],
@@ -117,7 +119,7 @@ async def calculate_order(db, restaurant: dict, requested_items, coupon_code=Non
             reservations.append({"product_id": product["id"], "quantity": quantity})
 
     coupon = None
-    discount = 0.0
+    coupon_discount = 0.0
     if coupon_code:
         coupon = await db.coupons.find_one({
             "restaurant_id": restaurant_id,
@@ -131,15 +133,26 @@ async def calculate_order(db, restaurant: dict, requested_items, coupon_code=Non
         if coupon.get("usage_limit") and int(coupon.get("used_count") or 0) >= int(coupon["usage_limit"]):
             raise HTTPException(status_code=400, detail="Cupom esgotado")
         if coupon.get("discount_type") == "percent":
-            discount = money(subtotal * min(max(float(coupon.get("discount_value") or 0), 0), 100) / 100)
+            coupon_discount = money(subtotal * min(max(float(coupon.get("discount_value") or 0), 0), 100) / 100)
         else:
-            discount = money(coupon.get("discount_value"))
-        discount = min(discount, subtotal)
+            coupon_discount = money(coupon.get("discount_value"))
+        coupon_discount = min(coupon_discount, subtotal)
+
+    quantity_discount = 0.0
+    min_items = max(int(restaurant.get("quantity_discount_min_items") or 0), 0)
+    percent = min(max(float(restaurant.get("quantity_discount_percent") or 0), 0), 100)
+    if min_items > 0 and item_count >= min_items and percent > 0:
+        quantity_discount = money(subtotal * percent / 100)
+
+    discount = min(money(coupon_discount + quantity_discount), subtotal)
 
     return {
         "items": canonical_items,
         "subtotal": subtotal,
         "discount": discount,
+        "coupon_discount": coupon_discount,
+        "quantity_discount": quantity_discount,
+        "item_count": item_count,
         "coupon": coupon,
         "reservations": reservations,
     }
