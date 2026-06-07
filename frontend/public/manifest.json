@@ -4,8 +4,8 @@
   "description": "Sistema de gestao de delivery",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#020403",
-  "theme_color": "#020403",
+  "background_color": "#070707",
+  "theme_color": "#e30613",
   "orientation": "portrait-primary",
   "icons": [
     { "src": "/favicon.ico", "sizes": "64x64", "type": "image/x-icon" },

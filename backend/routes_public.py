@@ -77,7 +77,7 @@ async def restaurant_share_preview(slug: str, request: Request):
         or "Acesse o cardapio digital e faca seu pedido online."
     )
     frontend_base = _frontend_base_url(request)
-    image = _absolute_url(r.get("cover_url") or r.get("logo_url") or f"{frontend_base}/logoeg.png", request)
+    image = _absolute_url(r.get("cover_url") or r.get("logo_url") or f"{frontend_base}/dinomenu-share.svg", request)
     url = f"{frontend_base}/loja/{html.escape(slug)}"
     safe_url = html.escape(url, quote=True)
     redirect_url = json.dumps(url)

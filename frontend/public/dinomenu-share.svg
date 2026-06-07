@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#070707"/>
+  <path fill="#e30613" d="M0 0h1200v72H0zm0 144h1200v72H0zm0 288h1200v72H0z"/>
+  <rect x="112" y="158" width="250" height="250" rx="18" fill="#e30613"/>
+  <text x="237" y="345" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif" font-size="190" font-weight="900">D</text>
+  <text x="418" y="283" fill="#fff" font-family="Arial,sans-serif" font-size="104" font-weight="900">DINO MENU</text>
+  <text x="424" y="350" fill="#fff" font-family="Arial,sans-serif" font-size="34" font-weight="700">CARDAPIO DIGITAL E DELIVERY</text>
+</svg>

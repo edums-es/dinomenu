@@ -55,13 +55,24 @@ app.include_router(routes_ws.router)
 app.include_router(routes_whatsapp.router)
 app.include_router(routes_printing.router)
 
-cors_origins = [
-    origin.strip()
-    for origin in os.environ.get(
+def get_cors_origins() -> list[str]:
+    configured = os.environ.get(
         "CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
-    ).split(",")
-    if origin.strip()
-]
+    )
+    origins = {origin.strip().rstrip("/") for origin in configured.split(",") if origin.strip()}
+
+    # The public site redirects the apex domain to www. Accept both browser
+    # origins when either variant is configured.
+    for origin in list(origins):
+        if origin.startswith("https://www."):
+            origins.add(origin.replace("https://www.", "https://", 1))
+        elif origin.startswith("https://") and origin.count(".") == 1:
+            origins.add(origin.replace("https://", "https://www.", 1))
+
+    return sorted(origins)
+
+
+cors_origins = get_cors_origins()
 
 app.add_middleware(
     CORSMiddleware,
