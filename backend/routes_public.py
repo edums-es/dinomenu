@@ -7,8 +7,10 @@ import asyncio
 import base64
 import hashlib
 import hmac
+import ipaddress
 from datetime import datetime, timezone
 
+import httpx
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 
@@ -29,6 +31,47 @@ router = APIRouter(prefix="/api/public", tags=["public"])
 logger = logging.getLogger(__name__)
 
 
+def _region_from_address(address: dict) -> dict:
+    neighborhood = (
+        address.get("suburb")
+        or address.get("neighbourhood")
+        or address.get("quarter")
+        or address.get("city_district")
+    )
+    city = (
+        address.get("city")
+        or address.get("town")
+        or address.get("municipality")
+        or address.get("village")
+    )
+    state = (
+        address.get("state_code")
+        or (address.get("ISO3166-2-lvl4") or "").split("-")[-1]
+        or address.get("state")
+    )
+    parts = [neighborhood, f"{city}/{state}" if city and state else city or state]
+    return {
+        "neighborhood": neighborhood,
+        "city": city,
+        "state": state,
+        "region": ", ".join(part for part in parts if part),
+    }
+
+
+def _client_public_ip(request: Request) -> str | None:
+    candidates = request.headers.get("x-forwarded-for", "").split(",")
+    if request.client:
+        candidates.append(request.client.host)
+    for candidate in candidates:
+        try:
+            parsed = ipaddress.ip_address(candidate.strip())
+            if parsed.is_global:
+                return str(parsed)
+        except ValueError:
+            continue
+    return None
+
+
 @router.get("/platform-config")
 async def public_platform_config():
     from routes_superadmin import get_platform_setting
@@ -38,6 +81,58 @@ async def public_platform_config():
         "onesignal_app_id": app_id,
         "push_enabled": str(push_enabled).lower() not in ("false", "0", ""),
     }
+
+
+@router.get("/location")
+async def public_location(request: Request, lat: float = None, lon: float = None):
+    headers = {
+        "Accept-Language": "pt-BR",
+        "User-Agent": "DinoMenu/1.0 (https://dinomenu.online)",
+    }
+    async with httpx.AsyncClient(timeout=7, headers=headers) as client:
+        if lat is not None and lon is not None:
+            if not -90 <= lat <= 90 or not -180 <= lon <= 180:
+                raise HTTPException(status_code=400, detail="Coordenadas invalidas")
+            try:
+                response = await client.get(
+                    "https://nominatim.openstreetmap.org/reverse",
+                    params={
+                        "format": "jsonv2",
+                        "lat": lat,
+                        "lon": lon,
+                        "addressdetails": 1,
+                        "zoom": 18,
+                    },
+                )
+                response.raise_for_status()
+                location = _region_from_address(response.json().get("address") or {})
+                if location["region"]:
+                    return {**location, "source": "gps"}
+            except (httpx.HTTPError, ValueError) as exc:
+                logger.warning("Falha ao resolver localizacao GPS: %s", exc)
+
+        client_ip = _client_public_ip(request)
+        if client_ip:
+            try:
+                response = await client.get(f"https://ipwho.is/{client_ip}")
+                response.raise_for_status()
+                payload = response.json()
+                if payload.get("success", True):
+                    city = payload.get("city")
+                    state = payload.get("region_code") or payload.get("region")
+                    region = f"{city}/{state}" if city and state else city or state
+                    if region:
+                        return {
+                            "neighborhood": None,
+                            "city": city,
+                            "state": state,
+                            "region": region,
+                            "source": "ip",
+                        }
+            except (httpx.HTTPError, ValueError) as exc:
+                logger.warning("Falha ao resolver localizacao por IP: %s", exc)
+
+    return {"region": None, "source": None}
 
 
 async def _get_restaurant_or_404(slug: str):

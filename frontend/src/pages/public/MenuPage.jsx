@@ -33,60 +33,86 @@ const DAY_LABELS = {mon:"Segunda",tue:"Terça",wed:"Quarta",thu:"Quinta",fri:"Se
 const LOCATION_CACHE_KEY = "dino-menu-customer-region";
 const LOCATION_CACHE_TTL = 24 * 60 * 60 * 1000;
 
-function formatRegion(address = {}) {
-  const neighborhood = address.suburb || address.neighbourhood || address.quarter || address.city_district;
-  const city = address.city || address.town || address.municipality || address.village;
-  const state = address.state_code || address["ISO3166-2-lvl4"]?.split("-").pop() || address.state;
-  return [neighborhood, city && state ? `${city}/${state}` : city || state].filter(Boolean).join(", ");
-}
-
 function RegionalPromo({ accent, buttonTextColor }) {
-  const [region, setRegion] = useState("sua regiao");
+  const [location, setLocation] = useState(null);
+  const [status, setStatus] = useState("loading");
+
+  const saveLocation = (nextLocation) => {
+    if (!nextLocation?.region) return false;
+    setLocation(nextLocation);
+    setStatus("ready");
+    localStorage.setItem(
+      LOCATION_CACHE_KEY,
+      JSON.stringify({ location: nextLocation, savedAt: Date.now() }),
+    );
+    return true;
+  };
+
+  const resolveLocation = async (coords) => {
+    try {
+      const { data } = await api.get("/public/location", {
+        params: coords ? { lat: coords.latitude, lon: coords.longitude } : undefined,
+      });
+      return saveLocation(data);
+    } catch {
+      return false;
+    }
+  };
+
+  const requestLocation = () => {
+    setStatus("loading");
+    if (!navigator.geolocation) {
+      resolveLocation().then((found) => !found && setStatus("idle"));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => resolveLocation(coords).then((found) => !found && setStatus("idle")),
+      () => resolveLocation().then((found) => !found && setStatus("idle")),
+      { enableHighAccuracy: false, timeout: 9000, maximumAge: LOCATION_CACHE_TTL },
+    );
+  };
 
   useEffect(() => {
     try {
       const cached = JSON.parse(localStorage.getItem(LOCATION_CACHE_KEY) || "null");
-      if (cached?.region && Date.now() - cached.savedAt < LOCATION_CACHE_TTL) {
-        setRegion(cached.region);
+      if (cached?.location?.region && Date.now() - cached.savedAt < LOCATION_CACHE_TTL) {
+        setLocation(cached.location);
+        setStatus("ready");
         return;
       }
     } catch {}
 
-    if (!navigator.geolocation) return;
-
-    navigator.geolocation.getCurrentPosition(
-      async ({ coords }) => {
-        try {
-          const params = new URLSearchParams({
-            format: "jsonv2",
-            lat: String(coords.latitude),
-            lon: String(coords.longitude),
-            addressdetails: "1",
-            zoom: "18",
-          });
-          const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params}`, {
-            headers: { "Accept-Language": "pt-BR" },
-          });
-          if (!response.ok) return;
-          const nextRegion = formatRegion((await response.json()).address);
-          if (!nextRegion) return;
-          setRegion(nextRegion);
-          localStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify({ region: nextRegion, savedAt: Date.now() }));
-        } catch {}
-      },
-      () => {},
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: LOCATION_CACHE_TTL },
-    );
+    requestLocation();
+    // Location is intentionally resolved once per menu visit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const label = location?.neighborhood
+    ? `${location.neighborhood}, ${location.city || location.state || ""}`.replace(/, $/, "")
+    : location?.region;
+
   return (
-    <div
-      className="px-4 py-3 text-center text-xs font-semibold leading-5"
-      style={{ background: accent, color: buttonTextColor }}
+    <button
+      type="button"
+      onClick={status === "ready" ? undefined : requestLocation}
+      className="absolute left-4 top-4 z-10 max-w-[calc(100%-5rem)] rounded-full border px-3 py-2 text-left shadow-lg backdrop-blur-md transition-colors"
+      style={{
+        background: status === "ready" ? hexRgba(accent, 0.88) : "rgba(0,0,0,.68)",
+        borderColor: status === "ready" ? accent : "rgba(255,255,255,.22)",
+        color: status === "ready" ? buttonTextColor : "#fff",
+      }}
       data-testid="regional-promo"
     >
-      Novidades exclusivas na regiao ({region}). Aproveite as promocoes por tempo limitado.
-    </div>
+      <span className="flex items-center gap-2">
+        {status === "loading"
+          ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+          : <MapPin className="h-3.5 w-3.5 shrink-0" />}
+        <span className="truncate text-[11px] font-bold">
+          {status === "ready" ? `Ofertas para ${label}` : status === "loading" ? "Identificando sua regiao..." : "Usar minha localizacao"}
+        </span>
+      </span>
+    </button>
   );
 }
 
@@ -183,13 +209,12 @@ function MenuContent({ data, slug }) {
 
   return (
     <div className="eg-menu w-full max-w-md mx-auto min-h-screen relative pb-32" style={{background:"#0A0A0A", color:textColor}}>
-      <RegionalPromo accent={accent} buttonTextColor={buttonTextColor} />
-
       {/* Cover */}
       <div className="relative w-full h-56 overflow-hidden">
         <img src={restaurant.cover_url || "https://images.pexels.com/photos/31124637/pexels-photo-31124637.jpeg"}
           alt="capa" loading="eager" decoding="async" fetchPriority="high" className="w-full h-full object-cover"/>
         <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-black/30 to-transparent"/>
+        <RegionalPromo accent={accent} buttonTextColor={buttonTextColor} />
         <button onClick={share} className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/60 backdrop-blur grid place-items-center border border-white/20">
           <Share2 className="w-4 h-4 text-white"/>
         </button>
