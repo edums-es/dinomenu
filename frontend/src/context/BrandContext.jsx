@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import api, { fileUrl } from "@/lib/api";
 
 export const DEFAULT_BRAND = {
@@ -22,8 +22,20 @@ export const DEFAULT_BRAND = {
 const BrandContext = createContext({
   brand: DEFAULT_BRAND,
   loading: true,
+  hasCachedBrand: false,
   refreshBrand: () => Promise.resolve(),
 });
+
+const BRAND_CACHE_KEY = "dinomenu_platform_brand";
+
+function readCachedBrand() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(BRAND_CACHE_KEY) || "null");
+    return cached && typeof cached === "object" ? { ...DEFAULT_BRAND, ...cached } : null;
+  } catch {
+    return null;
+  }
+}
 
 function setMeta(name, content, attr = "name") {
   if (!content) return;
@@ -49,31 +61,37 @@ function applyBrandToDocument(brand) {
 }
 
 export function BrandProvider({ children }) {
-  const [brand, setBrand] = useState(DEFAULT_BRAND);
+  const [cachedBrand] = useState(readCachedBrand);
+  const [brand, setBrand] = useState(cachedBrand || DEFAULT_BRAND);
   const [loading, setLoading] = useState(true);
 
-  const refreshBrand = async () => {
+  const refreshBrand = useCallback(async () => {
     try {
       const { data } = await api.get("/public/platform-config");
       const next = { ...DEFAULT_BRAND, ...(data?.brand || {}) };
       next.logo_url = fileUrl(next.logo_url) || "";
       next.icon_url = fileUrl(next.icon_url) || "";
       setBrand(next);
+      localStorage.setItem(BRAND_CACHE_KEY, JSON.stringify(next));
       applyBrandToDocument(next);
       return next;
     } catch {
-      applyBrandToDocument(DEFAULT_BRAND);
-      return DEFAULT_BRAND;
+      const fallback = cachedBrand || DEFAULT_BRAND;
+      applyBrandToDocument(fallback);
+      return fallback;
     } finally {
       setLoading(false);
     }
-  };
+  }, [cachedBrand]);
 
   useEffect(() => {
     refreshBrand();
-  }, []);
+  }, [refreshBrand]);
 
-  const value = useMemo(() => ({ brand, loading, refreshBrand }), [brand, loading]);
+  const value = useMemo(
+    () => ({ brand, loading, hasCachedBrand: !!cachedBrand, refreshBrand }),
+    [brand, loading, cachedBrand, refreshBrand],
+  );
 
   return <BrandContext.Provider value={value}>{children}</BrandContext.Provider>;
 }

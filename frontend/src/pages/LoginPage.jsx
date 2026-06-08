@@ -45,7 +45,7 @@ const FEATURES = [
 
 export default function LoginPage() {
   const { user, login, register } = useAuth();
-  const { brand } = useBrand();
+  const { brand, loading: brandLoading, hasCachedBrand } = useBrand();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState("login");
@@ -123,6 +123,14 @@ export default function LoginPage() {
     ? (template === "modern" ? "Entre para acompanhar pedidos, vendas e configuracoes." : "Acesse sua central de operacoes.")
     : "Crie sua estrutura para vender online.";
   const loginButtonLabel = template === "sport" ? "Entrar no painel" : "Entrar";
+
+  if (brandLoading && !hasCachedBrand) {
+    return (
+      <main className="min-h-screen grid place-items-center bg-[#070707]">
+        <Loader2 className="w-7 h-7 animate-spin text-white/40" aria-label="Carregando identidade visual" />
+      </main>
+    );
+  }
 
   return (
     <main className={`login-page login-template-${template}`}>
