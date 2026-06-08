@@ -294,26 +294,32 @@ export default function PlatformSettings() {
         </div>
 
         <div className="grid sm:grid-cols-3 gap-4">
-          <ColorField label="Cor primaria" value={settings.platform_primary_color || ""} onChange={set("platform_primary_color")} />
-          <ColorField label="Cor secundaria" value={settings.platform_secondary_color || ""} onChange={set("platform_secondary_color")} />
+          <ColorField label="Cor primaria (botoes e destaques)" value={settings.platform_primary_color || ""} onChange={set("platform_primary_color")} />
+          <ColorField label="Cor secundaria (gradientes)" value={settings.platform_secondary_color || ""} onChange={set("platform_secondary_color")} />
           <ColorField label="Cor do texto/contraste" value={settings.platform_accent_color || ""} onChange={set("platform_accent_color")} />
         </div>
 
         <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
-          <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Template da pagina de login</p>
+          <div className="mb-3">
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Template da pagina de login</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Os botoes, linhas e brilhos do login usam a cor primaria acima.
+            </p>
+          </div>
           <div className="grid sm:grid-cols-3 gap-3">
             {LOGIN_TEMPLATES.map((template) => {
               const selected = (settings.platform_login_template || brand.login_template || "sport") === template.value;
+              const selectedColor = settings.platform_primary_color || brand.primary_color || "#e30613";
               return (
                 <button
                   key={template.value}
                   type="button"
                   onClick={() => set("platform_login_template")(template.value)}
-                  className={`text-left rounded-2xl border-2 p-3 transition-all ${
-                    selected
-                      ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30"
-                      : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
-                  }`}
+                  className="text-left rounded-2xl border-2 border-gray-200 dark:border-gray-700 p-3 transition-all hover:border-gray-300 dark:hover:border-gray-600"
+                  style={{
+                    borderColor: selected ? selectedColor : undefined,
+                    background: selected ? `${selectedColor}12` : undefined,
+                  }}
                 >
                   <div
                     className={`h-20 rounded-xl overflow-hidden border border-white/10 ${
@@ -329,12 +335,12 @@ export default function PlatformSettings() {
                         className="h-2 rounded-full block"
                         style={{
                           width: selected ? "72%" : "48%",
-                          background: settings.platform_primary_color || brand.primary_color || "#e30613",
+                          background: selectedColor,
                         }}
                       />
                     </div>
                   </div>
-                  <p className={`font-semibold text-sm mt-3 ${selected ? "text-indigo-700 dark:text-indigo-300" : "dark:text-white"}`}>
+                  <p className="font-semibold text-sm mt-3 dark:text-white" style={{ color: selected ? selectedColor : undefined }}>
                     {selected && <CheckCircle2 className="w-3.5 h-3.5 inline mr-1.5" />}
                     {template.title}
                   </p>
