@@ -14,6 +14,7 @@ export const DEFAULT_BRAND = {
   login_kicker: "Sua operacao em campo",
   login_title: "Venda com raca. Gerencie com controle.",
   login_subtitle: "Cardapio, pedidos, caixa e clientes em uma plataforma feita para o ritmo do seu restaurante.",
+  login_template: "sport",
   powered_by_enabled: true,
 };
 

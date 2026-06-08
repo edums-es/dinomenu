@@ -44,6 +44,7 @@ WHITE_LABEL_DEFAULTS = {
     "login_kicker": "Sua operacao em campo",
     "login_title": "Venda com raca. Gerencie com controle.",
     "login_subtitle": "Cardapio, pedidos, caixa e clientes em uma plataforma feita para o ritmo do seu restaurante.",
+    "login_template": "sport",
     "powered_by_enabled": True,
 }
 
@@ -60,6 +61,7 @@ WHITE_LABEL_FIELDS = {
     "platform_login_kicker": "login_kicker",
     "platform_login_title": "login_title",
     "platform_login_subtitle": "login_subtitle",
+    "platform_login_template": "login_template",
     "platform_powered_by_enabled": "powered_by_enabled",
 }
 
@@ -74,6 +76,8 @@ def public_white_label_config(settings: dict | None = None) -> dict:
         if isinstance(value, str) and not value.strip():
             continue
         brand[target_key] = value
+    if brand.get("login_template") not in {"sport", "modern", "minimal"}:
+        brand["login_template"] = WHITE_LABEL_DEFAULTS["login_template"]
     brand["powered_by_enabled"] = str(brand.get("powered_by_enabled")).lower() not in ("false", "0", "no")
     return brand
 

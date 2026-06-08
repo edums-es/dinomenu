@@ -64,13 +64,13 @@ export default function LoginPage() {
   const focusInput = (event) => {
     event.target.style.borderColor = brand.primary_color || RED;
     event.target.style.boxShadow = `0 0 0 3px ${brand.primary_color || RED}2e`;
-    event.target.style.background = "#171717";
+    event.target.style.background = softInput ? "#f3f7ff" : "#171717";
   };
 
   const blurInput = (event) => {
-    event.target.style.borderColor = "rgba(255,255,255,.16)";
+    event.target.style.borderColor = softInput ? "rgba(255,255,255,.1)" : "rgba(255,255,255,.16)";
     event.target.style.boxShadow = "none";
-    event.target.style.background = "#111111";
+    event.target.style.background = softInput ? "#e8f0ff" : "#111111";
   };
 
   const handleLogin = async (event) => {
@@ -104,11 +104,27 @@ export default function LoginPage() {
   const primary = brand.primary_color || RED;
   const secondary = brand.secondary_color || RED_DARK;
   const accent = brand.accent_color || "#ffffff";
+  const template = ["sport", "modern", "minimal"].includes(brand.login_template) ? brand.login_template : "sport";
+  const softInput = template === "modern" || template === "minimal";
+  const inputStyle = {
+    ...INPUT_BASE,
+    background: softInput ? "#e8f0ff" : "#111111",
+    border: softInput ? "1px solid rgba(255,255,255,.1)" : "1px solid rgba(255,255,255,.16)",
+    color: softInput ? "#0b0f14" : TEXT,
+    borderRadius: template === "sport" ? 8 : 10,
+  };
   const brandInitial = (brand.short_name || brand.name || "D").trim()[0]?.toUpperCase() || "D";
   const titleParts = (brand.login_title || "").split(". ").filter(Boolean);
+  const accessTitle = tab === "login"
+    ? (template === "modern" ? "Acesse seu painel" : template === "minimal" ? "Acesso ao painel" : "Entre no painel")
+    : "Monte sua loja";
+  const accessSubtitle = tab === "login"
+    ? (template === "modern" ? "Entre para acompanhar pedidos, vendas e configuracoes." : "Acesse sua central de operacoes.")
+    : "Crie sua estrutura para vender online.";
+  const loginButtonLabel = template === "sport" ? "Entrar no painel" : "Entrar";
 
   return (
-    <main className="login-page">
+    <main className={`login-page login-template-${template}`}>
       <section className="login-showcase">
         <div className="login-stripes" aria-hidden="true" />
 
@@ -148,8 +164,8 @@ export default function LoginPage() {
 
         <div className="login-card">
           <span className="login-card-icon">{tab === "login" ? <ShieldCheck size={23} /> : <Store size={23} />}</span>
-          <h2>{tab === "login" ? "Entre no painel" : "Monte sua loja"}</h2>
-          <p>{tab === "login" ? "Acesse sua central de operacoes." : "Crie sua estrutura para vender online."}</p>
+          <h2>{accessTitle}</h2>
+          <p>{accessSubtitle}</p>
 
           <div className="login-tabs" role="tablist" aria-label="Autenticacao">
             <button type="button" onClick={() => setTab("login")} className={tab === "login" ? "is-active" : ""}>
@@ -170,7 +186,7 @@ export default function LoginPage() {
                   onChange={(event) => setEmail(event.target.value)}
                   data-testid="login-email"
                   placeholder="voce@restaurante.com"
-                  style={INPUT_BASE}
+                  style={inputStyle}
                   onFocus={focusInput}
                   onBlur={blurInput}
                 />
@@ -183,11 +199,12 @@ export default function LoginPage() {
                   setShowPass={setShowPass}
                   testId="login-password"
                   placeholder="Digite sua senha"
+                  inputStyle={inputStyle}
                   onFocus={focusInput}
                   onBlur={blurInput}
                 />
               </Field>
-              <SubmitButton loading={loading} testId="login-submit" label="Entrar no painel" />
+              <SubmitButton loading={loading} testId="login-submit" label={loginButtonLabel} />
             </form>
           ) : (
             <form onSubmit={handleRegister} className="login-form">
@@ -199,7 +216,7 @@ export default function LoginPage() {
                   onChange={(event) => setRStore(event.target.value)}
                   data-testid="register-store"
                   placeholder="Ex: Burger Prime"
-                  style={INPUT_BASE}
+                  style={inputStyle}
                   onFocus={focusInput}
                   onBlur={blurInput}
                 />
@@ -212,7 +229,7 @@ export default function LoginPage() {
                   onChange={(event) => setRName(event.target.value)}
                   data-testid="register-name"
                   placeholder="Joao Silva"
-                  style={INPUT_BASE}
+                  style={inputStyle}
                   onFocus={focusInput}
                   onBlur={blurInput}
                 />
@@ -225,7 +242,7 @@ export default function LoginPage() {
                   onChange={(event) => setREmail(event.target.value)}
                   data-testid="register-email"
                   placeholder="voce@email.com"
-                  style={INPUT_BASE}
+                  style={inputStyle}
                   onFocus={focusInput}
                   onBlur={blurInput}
                 />
@@ -239,6 +256,7 @@ export default function LoginPage() {
                   testId="register-password"
                   placeholder="Minimo 6 caracteres"
                   minLength={6}
+                  inputStyle={inputStyle}
                   onFocus={focusInput}
                   onBlur={blurInput}
                 />
@@ -322,7 +340,7 @@ export default function LoginPage() {
           place-items: center;
           border-radius: 4px;
           color: #fff;
-          background: ${RED};
+          background: ${primary};
           box-shadow: 8px 8px 0 #fff;
           font: 900 31px/1 Outfit, sans-serif;
           transform: skew(-7deg);
@@ -560,6 +578,218 @@ export default function LoginPage() {
 
         .login-card-footer svg { color: ${primary}; }
 
+        .login-template-modern {
+          grid-template-columns: minmax(520px, 52%) 1fr;
+          background:
+            radial-gradient(circle at 78% 70%, ${primary}24, transparent 28%),
+            #020806;
+        }
+
+        .login-template-modern .login-showcase {
+          padding: 48px;
+          background:
+            radial-gradient(circle at 80% 78%, ${primary}38, transparent 35%),
+            linear-gradient(135deg, #000 0%, #03100b 100%);
+          border-right-color: ${primary}26;
+        }
+
+        .login-template-modern .login-stripes { display: none; }
+
+        .login-template-modern .login-showcase::after {
+          content: "";
+          width: 740px;
+          height: 740px;
+          right: -300px;
+          bottom: -380px;
+          border: 1px solid ${primary}45;
+          border-radius: 50%;
+          color: transparent;
+          -webkit-text-stroke: 0;
+          transform: none;
+        }
+
+        .login-template-modern .login-mark,
+        .login-template-modern .login-logo {
+          border-radius: 14px;
+          box-shadow: none;
+          transform: none;
+          background: ${primary}1f;
+          border: 1px solid ${primary}66;
+        }
+
+        .login-template-modern .login-brand strong {
+          text-transform: none;
+          letter-spacing: -.04em;
+        }
+
+        .login-template-modern .login-kicker {
+          color: ${primary};
+          background: transparent;
+          padding-left: 0;
+          transform: none;
+        }
+
+        .login-template-modern .login-kicker::before {
+          content: "";
+          width: 38px;
+          height: 2px;
+          background: ${primary};
+          display: inline-block;
+          margin-right: 6px;
+        }
+
+        .login-template-modern .login-copy h1 {
+          max-width: 740px;
+          font-size: clamp(46px, 4.7vw, 72px);
+          letter-spacing: -.045em;
+          text-transform: none;
+        }
+
+        .login-template-modern .login-copy h1 em { color: #fff; }
+
+        .login-template-modern .login-features {
+          position: relative;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 12px;
+          background: transparent;
+          border: 0;
+        }
+
+        .login-template-modern .login-features div {
+          min-height: 74px;
+          border: 1px solid rgba(255,255,255,.13);
+          border-radius: 12px;
+          background: rgba(255,255,255,.035);
+        }
+
+        .login-template-modern .login-access {
+          background:
+            radial-gradient(circle at 20% 30%, ${primary}18, transparent 26%),
+            #020806;
+        }
+
+        .login-template-modern .login-access-head {
+          color: rgba(255,255,255,.5);
+        }
+
+        .login-template-modern .login-card {
+          border: 1px solid rgba(255,255,255,.14);
+          border-radius: 22px;
+          border-top: 1px solid rgba(255,255,255,.14);
+          background: linear-gradient(145deg, rgba(29, 58, 44, .88), rgba(10, 18, 14, .95));
+          box-shadow: 0 36px 100px rgba(0,0,0,.72), 0 0 90px ${primary}1f;
+        }
+
+        .login-template-modern .login-card-icon {
+          border-radius: 14px;
+          background: ${primary}1f;
+          border: 1px solid ${primary}75;
+          color: ${primary};
+        }
+
+        .login-template-modern .login-card h2 {
+          text-transform: none;
+          font-size: 30px;
+        }
+
+        .login-template-modern .login-tabs {
+          padding: 4px;
+          gap: 4px;
+          border: 1px solid rgba(255,255,255,.1);
+          border-radius: 12px;
+          background: rgba(0,0,0,.25);
+        }
+
+        .login-template-modern .login-tabs button {
+          border: 0;
+          border-radius: 9px;
+        }
+
+        .login-template-modern .login-tabs button.is-active {
+          color: #05110c;
+          background: ${primary};
+        }
+
+        .login-template-modern .login-submit {
+          border-radius: 10px;
+          color: #05110c;
+          background: linear-gradient(135deg, ${primary}, ${secondary});
+        }
+
+        .login-template-modern .login-field label {
+          color: rgba(255,255,255,.52);
+        }
+
+        .login-template-minimal {
+          display: grid;
+          grid-template-columns: 1fr;
+          background:
+            radial-gradient(circle at 50% 0%, ${primary}26, transparent 34%),
+            #080808;
+        }
+
+        .login-template-minimal .login-showcase { display: none; }
+
+        .login-template-minimal .login-access {
+          background:
+            linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px),
+            radial-gradient(circle at 50% 12%, ${primary}24, transparent 28%),
+            #090909;
+          background-size: 38px 38px, 38px 38px, auto, auto;
+        }
+
+        .login-template-minimal .login-access::before {
+          content: "${(brand.short_name || brand.name || "MENU").replace(/"/g, "")}";
+          position: absolute;
+          top: 46px;
+          left: 50%;
+          transform: translateX(-50%);
+          color: rgba(255,255,255,.88);
+          font: 900 24px/1 Outfit, sans-serif;
+          letter-spacing: -.04em;
+        }
+
+        .login-template-minimal .login-access {
+          position: relative;
+        }
+
+        .login-template-minimal .login-access-head {
+          justify-content: center;
+        }
+
+        .login-template-minimal .login-card {
+          border: 1px solid rgba(255,255,255,.12);
+          border-top: 0;
+          border-radius: 28px;
+          background: rgba(14,14,14,.94);
+          box-shadow: 0 40px 120px rgba(0,0,0,.65);
+        }
+
+        .login-template-minimal .login-card-icon {
+          margin-left: auto;
+          margin-right: auto;
+          border-radius: 16px;
+          background: ${primary};
+        }
+
+        .login-template-minimal .login-card h2,
+        .login-template-minimal .login-card p {
+          text-align: center;
+        }
+
+        .login-template-minimal .login-card h2 {
+          text-transform: none;
+        }
+
+        .login-template-minimal .login-tabs button.is-active {
+          color: ${primary};
+        }
+
+        .login-template-minimal .login-submit {
+          border-radius: 12px;
+        }
+
         @media (max-width: 980px) {
           .login-page { grid-template-columns: 1fr; overflow: auto; }
           .login-showcase { min-height: auto; padding: 28px 22px 24px; }
@@ -584,7 +814,7 @@ function Field({ label, children }) {
   return <div className="login-field"><label>{label}</label>{children}</div>;
 }
 
-function PasswordInput({ value, onChange, showPass, setShowPass, testId, placeholder, minLength, onFocus, onBlur }) {
+function PasswordInput({ value, onChange, showPass, setShowPass, testId, placeholder, minLength, inputStyle = INPUT_BASE, onFocus, onBlur }) {
   return (
     <div style={{ position: "relative" }}>
       <input
@@ -595,7 +825,7 @@ function PasswordInput({ value, onChange, showPass, setShowPass, testId, placeho
         onChange={(event) => onChange(event.target.value)}
         data-testid={testId}
         placeholder={placeholder}
-        style={{ ...INPUT_BASE, paddingRight: 48 }}
+        style={{ ...inputStyle, paddingRight: 48 }}
         onFocus={onFocus}
         onBlur={onBlur}
       />

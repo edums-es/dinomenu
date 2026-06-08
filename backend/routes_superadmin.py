@@ -246,6 +246,7 @@ async def update_platform_settings(body: dict, user=Depends(SUPER)):
         "platform_login_kicker",
         "platform_login_title",
         "platform_login_subtitle",
+        "platform_login_template",
         "platform_powered_by_enabled",
     }
     clean = {}

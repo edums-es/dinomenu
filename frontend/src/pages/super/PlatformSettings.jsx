@@ -80,6 +80,24 @@ function ColorField({ label, value, onChange }) {
   );
 }
 
+const LOGIN_TEMPLATES = [
+  {
+    value: "sport",
+    title: "Esportivo",
+    subtitle: "Visual agressivo com faixas e alto contraste.",
+  },
+  {
+    value: "modern",
+    title: "Modern Delivery",
+    subtitle: "Glass escuro, verde premium e foco em produto SaaS.",
+  },
+  {
+    value: "minimal",
+    title: "Minimal Pro",
+    subtitle: "Tela limpa, centralizada e mais corporativa.",
+  },
+];
+
 function StatusDot({ ok, label }) {
   return (
     <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${
@@ -147,6 +165,7 @@ export default function PlatformSettings() {
         "platform_login_kicker",
         "platform_login_title",
         "platform_login_subtitle",
+        "platform_login_template",
         "platform_powered_by_enabled",
       ]);
       for (const [k, v] of Object.entries(settings)) {
@@ -278,6 +297,52 @@ export default function PlatformSettings() {
           <ColorField label="Cor primaria" value={settings.platform_primary_color || ""} onChange={set("platform_primary_color")} />
           <ColorField label="Cor secundaria" value={settings.platform_secondary_color || ""} onChange={set("platform_secondary_color")} />
           <ColorField label="Cor do texto/contraste" value={settings.platform_accent_color || ""} onChange={set("platform_accent_color")} />
+        </div>
+
+        <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Template da pagina de login</p>
+          <div className="grid sm:grid-cols-3 gap-3">
+            {LOGIN_TEMPLATES.map((template) => {
+              const selected = (settings.platform_login_template || brand.login_template || "sport") === template.value;
+              return (
+                <button
+                  key={template.value}
+                  type="button"
+                  onClick={() => set("platform_login_template")(template.value)}
+                  className={`text-left rounded-2xl border-2 p-3 transition-all ${
+                    selected
+                      ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30"
+                      : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+                  }`}
+                >
+                  <div
+                    className={`h-20 rounded-xl overflow-hidden border border-white/10 ${
+                      template.value === "sport"
+                        ? "bg-[linear-gradient(135deg,#191919_0_45%,#070707_45%_100%)]"
+                        : template.value === "modern"
+                          ? "bg-[radial-gradient(circle_at_80%_70%,rgba(34,227,155,.35),transparent_35%),#04110c]"
+                          : "bg-[linear-gradient(135deg,#f8fafc,#e5e7eb)]"
+                    }`}
+                  >
+                    <div className="h-full p-2 flex items-end">
+                      <span
+                        className="h-2 rounded-full block"
+                        style={{
+                          width: selected ? "72%" : "48%",
+                          background: settings.platform_primary_color || brand.primary_color || "#e30613",
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <p className={`font-semibold text-sm mt-3 ${selected ? "text-indigo-700 dark:text-indigo-300" : "dark:text-white"}`}>
+                    {selected && <CheckCircle2 className="w-3.5 h-3.5 inline mr-1.5" />}
+                    {template.title}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1 leading-relaxed">{template.subtitle}</p>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="grid sm:grid-cols-2 gap-4 pt-2 border-t border-gray-100 dark:border-gray-800">
