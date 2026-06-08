@@ -14,6 +14,7 @@ import {
 import ImageUpload from "@/components/admin/ImageUpload";
 import { Loader2, Save, Copy, Check, Printer, RefreshCw, KeyRound, Activity, Download, MonitorDown } from "lucide-react";
 import { API } from "@/lib/api";
+import { useBrand } from "@/context/BrandContext";
 
 const PAYMENT_OPTIONS = ["Pix", "Dinheiro", "Cartão de crédito", "Cartão de débito", "Vale refeição"];
 
@@ -48,6 +49,7 @@ const PRINT_TRIGGER_LABELS = {
 };
 
 export default function Settings() {
+  const { brand } = useBrand();
   const [r, setR] = useState(null);
   const [saving, setSaving] = useState(false);
   const [printing, setPrinting] = useState(null);
@@ -570,7 +572,7 @@ export default function Settings() {
                   <div>
                     <h3 className="font-semibold text-gray-900 dark:text-white">Instalador Windows da impressora</h3>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      Baixe no computador da loja, instale o app e deixe o icone do Dino Menu ativo perto do relogio do Windows.
+                      Baixe no computador da loja, instale o app e deixe o icone do {brand.short_name || brand.name} ativo perto do relogio do Windows.
                     </p>
                   </div>
                 </div>
@@ -589,7 +591,7 @@ export default function Settings() {
               <div className="grid md:grid-cols-4 gap-3 mt-4">
                 {[
                   ["1", "Baixe e extraia o pacote no computador da loja."],
-                  ["2", "De dois cliques em Instalar Dino Menu Impressora."],
+                  ["2", "De dois cliques no arquivo de instalacao da impressora."],
                   ["3", "Finalize a instalacao e mantenha o app aberto na bandeja."],
                   ["4", "Use Testar impressao para conferir a impressora."],
                 ].map(([step, text]) => (

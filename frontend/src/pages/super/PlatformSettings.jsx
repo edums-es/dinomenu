@@ -4,10 +4,13 @@ import { toast } from "sonner";
 import {
   Bell, Wifi, Save, Eye, EyeOff, RefreshCw, Send,
   CheckCircle2, XCircle, Loader2, Info, Zap, MessageCircle,
+  Palette,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import ImageUpload from "@/components/admin/ImageUpload";
+import { useBrand } from "@/context/BrandContext";
 
 function SectionCard({ icon: Icon, title, subtitle, color = "#6366f1", children }) {
   return (
@@ -56,6 +59,27 @@ function SecretInput({ value, onChange, placeholder, disabled }) {
   );
 }
 
+function ColorField({ label, value, onChange }) {
+  return (
+    <Field label={label}>
+      <div className="flex gap-2">
+        <Input
+          type="color"
+          value={value || "#000000"}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-14 p-1 dark:bg-[#0D1117] dark:border-gray-700"
+        />
+        <Input
+          value={value || ""}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="#e30613"
+          className="font-mono text-sm dark:bg-[#0D1117] dark:border-gray-700 dark:text-gray-200"
+        />
+      </div>
+    </Field>
+  );
+}
+
 function StatusDot({ ok, label }) {
   return (
     <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${
@@ -69,6 +93,7 @@ function StatusDot({ ok, label }) {
 }
 
 export default function PlatformSettings() {
+  const { brand, refreshBrand } = useBrand();
   const [settings, setSettings] = useState({});
   const [wsStats, setWsStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -109,12 +134,29 @@ export default function PlatformSettings() {
     setSaving(true);
     try {
       const payload = {};
+      const whiteLabelKeys = new Set([
+        "platform_name",
+        "platform_short_name",
+        "platform_tagline",
+        "platform_description",
+        "platform_logo_url",
+        "platform_icon_url",
+        "platform_primary_color",
+        "platform_secondary_color",
+        "platform_accent_color",
+        "platform_login_kicker",
+        "platform_login_title",
+        "platform_login_subtitle",
+        "platform_powered_by_enabled",
+      ]);
       for (const [k, v] of Object.entries(settings)) {
-        if (v !== "" && v !== null && v !== undefined) payload[k] = v;
+        if (whiteLabelKeys.has(k)) payload[k] = v ?? "";
+        else if (v !== "" && v !== null && v !== undefined) payload[k] = v;
       }
       await api.put("/super/platform-settings", payload);
       toast.success("Configuracoes salvas!");
       await loadSettings();
+      await refreshBrand();
     } catch {
       toast.error("Erro ao salvar");
     } finally {
@@ -166,6 +208,107 @@ export default function PlatformSettings() {
           Configuracoes globais — aplicadas a todos os restaurantes da plataforma automaticamente.
         </p>
       </div>
+
+      {/* White Label */}
+      <SectionCard icon={Palette} title="White Label" subtitle="Marca, logo e cores da instancia" color={settings.platform_primary_color || brand.primary_color || "#e30613"}>
+        <div
+          className="rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden"
+          style={{
+            background: `linear-gradient(135deg, ${settings.platform_primary_color || brand.primary_color || "#e30613"}, ${settings.platform_secondary_color || brand.secondary_color || "#97000a"})`,
+          }}
+        >
+          <div className="p-5 bg-black/35 text-white flex items-center gap-4">
+            {settings.platform_logo_url || brand.logo_url ? (
+              <img
+                src={settings.platform_logo_url || brand.logo_url}
+                alt="Logo"
+                className="w-14 h-14 rounded-xl object-contain bg-white/10 p-2 border border-white/15"
+              />
+            ) : (
+              <span className="w-14 h-14 rounded-xl bg-white text-black grid place-items-center font-display font-black text-2xl">
+                {(settings.platform_short_name || settings.platform_name || brand.short_name || brand.name || "D")[0]?.toUpperCase()}
+              </span>
+            )}
+            <div className="min-w-0">
+              <p className="font-display font-black text-2xl leading-none truncate">{settings.platform_name || brand.name}</p>
+              <p className="text-sm text-white/70 mt-1 truncate">{settings.platform_tagline || brand.tagline}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Field label="Nome do sistema">
+            <Input value={settings.platform_name || ""} onChange={(e) => set("platform_name")(e.target.value)}
+              placeholder="Dino Menu"
+              className="dark:bg-[#0D1117] dark:border-gray-700 dark:text-gray-200" />
+          </Field>
+          <Field label="Nome curto">
+            <Input value={settings.platform_short_name || ""} onChange={(e) => set("platform_short_name")(e.target.value)}
+              placeholder="Dino Menu"
+              className="dark:bg-[#0D1117] dark:border-gray-700 dark:text-gray-200" />
+          </Field>
+          <Field label="Slogan">
+            <Input value={settings.platform_tagline || ""} onChange={(e) => set("platform_tagline")(e.target.value)}
+              placeholder="Cardapio digital"
+              className="dark:bg-[#0D1117] dark:border-gray-700 dark:text-gray-200" />
+          </Field>
+          <Field label="Descricao SEO">
+            <Input value={settings.platform_description || ""} onChange={(e) => set("platform_description")(e.target.value)}
+              placeholder="Cardapio digital e delivery online."
+              className="dark:bg-[#0D1117] dark:border-gray-700 dark:text-gray-200" />
+          </Field>
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-4">
+          <ImageUpload
+            label="Logo da plataforma"
+            value={settings.platform_logo_url || ""}
+            onChange={(value) => set("platform_logo_url")(value || "")}
+            aspect="aspect-[4/2]"
+          />
+          <ImageUpload
+            label="Icone / marca compacta"
+            value={settings.platform_icon_url || ""}
+            onChange={(value) => set("platform_icon_url")(value || "")}
+            aspect="aspect-square"
+          />
+        </div>
+
+        <div className="grid sm:grid-cols-3 gap-4">
+          <ColorField label="Cor primaria" value={settings.platform_primary_color || ""} onChange={set("platform_primary_color")} />
+          <ColorField label="Cor secundaria" value={settings.platform_secondary_color || ""} onChange={set("platform_secondary_color")} />
+          <ColorField label="Cor do texto/contraste" value={settings.platform_accent_color || ""} onChange={set("platform_accent_color")} />
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-4 pt-2 border-t border-gray-100 dark:border-gray-800">
+          <Field label="Chamada pequena do login">
+            <Input value={settings.platform_login_kicker || ""} onChange={(e) => set("platform_login_kicker")(e.target.value)}
+              placeholder="Sua operacao em campo"
+              className="dark:bg-[#0D1117] dark:border-gray-700 dark:text-gray-200" />
+          </Field>
+          <Field label="Titulo do login">
+            <Input value={settings.platform_login_title || ""} onChange={(e) => set("platform_login_title")(e.target.value)}
+              placeholder="Venda com raca. Gerencie com controle."
+              className="dark:bg-[#0D1117] dark:border-gray-700 dark:text-gray-200" />
+          </Field>
+        </div>
+        <Field label="Subtitulo do login">
+          <Input value={settings.platform_login_subtitle || ""} onChange={(e) => set("platform_login_subtitle")(e.target.value)}
+            placeholder="Cardapio, pedidos, caixa e clientes em uma plataforma feita para o ritmo do seu restaurante."
+            className="dark:bg-[#0D1117] dark:border-gray-700 dark:text-gray-200" />
+        </Field>
+
+        <div className="flex items-center justify-between py-1">
+          <div>
+            <p className="text-sm font-medium dark:text-white">Mostrar "Cardapio digital por..." no rodape publico</p>
+            <p className="text-xs text-gray-400">Desative para instancias 100% white label.</p>
+          </div>
+          <Switch
+            checked={settings.platform_powered_by_enabled !== false && settings.platform_powered_by_enabled !== "false"}
+            onCheckedChange={(v) => set("platform_powered_by_enabled")(v)}
+          />
+        </div>
+      </SectionCard>
 
       {/* WebSocket */}
       <SectionCard icon={Wifi} title="WebSocket — Tempo Real" subtitle="Canal persistente para atualizacoes instantaneas" color="#10b981">

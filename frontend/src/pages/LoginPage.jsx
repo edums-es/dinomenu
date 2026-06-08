@@ -15,6 +15,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useBrand } from "@/context/BrandContext";
 import { formatApiError } from "@/lib/api";
 
 const RED = "#e30613";
@@ -44,6 +45,7 @@ const FEATURES = [
 
 export default function LoginPage() {
   const { user, login, register } = useAuth();
+  const { brand } = useBrand();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState("login");
@@ -60,8 +62,8 @@ export default function LoginPage() {
   }, [user, navigate]);
 
   const focusInput = (event) => {
-    event.target.style.borderColor = RED;
-    event.target.style.boxShadow = "0 0 0 3px rgba(227,6,19,.18)";
+    event.target.style.borderColor = brand.primary_color || RED;
+    event.target.style.boxShadow = `0 0 0 3px ${brand.primary_color || RED}2e`;
     event.target.style.background = "#171717";
   };
 
@@ -76,7 +78,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const loggedUser = await login(email, password);
-      toast.success("Bem-vindo ao Dino Menu!");
+      toast.success(`Bem-vindo ao ${brand.name || "Dino Menu"}!`);
       navigate(loggedUser.role === "super_admin" ? "/super" : "/supermaster", { replace: true });
     } catch (error) {
       toast.error(formatApiError(error.response?.data?.detail) || "Falha no login");
@@ -99,25 +101,36 @@ export default function LoginPage() {
     }
   };
 
+  const primary = brand.primary_color || RED;
+  const secondary = brand.secondary_color || RED_DARK;
+  const accent = brand.accent_color || "#ffffff";
+  const brandInitial = (brand.short_name || brand.name || "D").trim()[0]?.toUpperCase() || "D";
+  const titleParts = (brand.login_title || "").split(". ").filter(Boolean);
+
   return (
     <main className="login-page">
       <section className="login-showcase">
         <div className="login-stripes" aria-hidden="true" />
 
-        <div className="login-brand" aria-label="Dino Menu">
-          <span className="login-mark">D</span>
+        <div className="login-brand" aria-label={brand.name}>
+          {brand.logo_url ? (
+            <span className="login-logo"><img src={brand.logo_url} alt={brand.name} /></span>
+          ) : (
+            <span className="login-mark">{brandInitial}</span>
+          )}
           <span>
-            <strong>Dino Menu</strong>
-            <small>Cardapio digital</small>
+            <strong>{brand.name}</strong>
+            <small>{brand.tagline}</small>
           </span>
         </div>
 
         <div className="login-copy">
-          <span className="login-kicker"><Flame size={16} /> Sua operacao em campo</span>
-          <h1>Venda com raca.<br /><em>Gerencie com controle.</em></h1>
-          <p>
-            Cardapio, pedidos, caixa e clientes em uma plataforma feita para o ritmo do seu restaurante.
-          </p>
+          <span className="login-kicker"><Flame size={16} /> {brand.login_kicker}</span>
+          <h1>
+            {titleParts[0] || "Venda online."}
+            {titleParts[1] ? <><br /><em>{titleParts.slice(1).join(". ")}</em></> : null}
+          </h1>
+          <p>{brand.login_subtitle}</p>
         </div>
 
         <div className="login-features">
@@ -263,13 +276,13 @@ export default function LoginPage() {
           flex-direction: column;
           overflow: hidden;
           background:
-            radial-gradient(circle at 75% 80%, rgba(227,6,19,.35), transparent 34%),
+            radial-gradient(circle at 75% 80%, ${primary}59, transparent 34%),
             linear-gradient(145deg, #171717 0 42%, #090909 42% 100%);
           border-right: 1px solid rgba(255,255,255,.1);
         }
 
         .login-showcase::after {
-          content: "DINOMENU";
+          content: "${(brand.short_name || brand.name || "DINOMENU").replace(/"/g, "")}";
           position: absolute;
           right: -44px;
           bottom: 52px;
@@ -288,7 +301,7 @@ export default function LoginPage() {
           right: -260px;
           top: 17%;
           transform: rotate(-28deg);
-          background: repeating-linear-gradient(0deg, ${RED} 0 34px, #080808 34px 68px);
+          background: repeating-linear-gradient(0deg, ${primary} 0 34px, #080808 34px 68px);
           opacity: .82;
           animation: pulseStripe 5s ease-in-out infinite;
         }
@@ -313,6 +326,26 @@ export default function LoginPage() {
           box-shadow: 8px 8px 0 #fff;
           font: 900 31px/1 Outfit, sans-serif;
           transform: skew(-7deg);
+        }
+
+        .login-logo {
+          width: 74px;
+          height: 54px;
+          display: grid;
+          place-items: center;
+          border-radius: 8px;
+          background: rgba(255,255,255,.08);
+          border: 1px solid rgba(255,255,255,.12);
+          box-shadow: 8px 8px 0 ${accent};
+          overflow: hidden;
+        }
+
+        .login-logo img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          padding: 7px;
+          box-sizing: border-box;
         }
 
         .login-brand strong {
@@ -348,7 +381,7 @@ export default function LoginPage() {
           margin-bottom: 26px;
           padding: 8px 11px;
           color: #fff;
-          background: ${RED};
+          background: ${primary};
           font-size: 11px;
           font-weight: 900;
           letter-spacing: .16em;
@@ -364,7 +397,7 @@ export default function LoginPage() {
         }
 
         .login-copy h1 em {
-          color: ${RED};
+          color: ${primary};
           font-style: normal;
         }
 
@@ -396,7 +429,7 @@ export default function LoginPage() {
           font-weight: 800;
         }
 
-        .login-features svg { color: ${RED}; flex: 0 0 auto; }
+        .login-features svg { color: ${primary}; flex: 0 0 auto; }
 
         .login-access {
           min-height: 100vh;
@@ -425,14 +458,14 @@ export default function LoginPage() {
           text-transform: uppercase;
         }
 
-        .login-access-line { width: 30px; height: 2px; background: ${RED}; }
+        .login-access-line { width: 30px; height: 2px; background: ${primary}; }
 
         .login-card {
           width: min(440px, 100%);
           box-sizing: border-box;
           padding: 30px;
           border: 1px solid rgba(255,255,255,.14);
-          border-top: 4px solid ${RED};
+          border-top: 4px solid ${primary};
           border-radius: 4px;
           background: rgba(12,12,12,.96);
           box-shadow: 0 35px 90px rgba(0,0,0,.6);
@@ -445,7 +478,7 @@ export default function LoginPage() {
           display: grid;
           place-items: center;
           color: #fff;
-          background: ${RED};
+          background: ${primary};
           border-radius: 4px;
         }
 
@@ -479,7 +512,7 @@ export default function LoginPage() {
           cursor: pointer;
         }
 
-        .login-tabs button.is-active { border-bottom-color: ${RED}; color: #fff; }
+        .login-tabs button.is-active { border-bottom-color: ${primary}; color: #fff; }
         .login-form { display: flex; flex-direction: column; gap: 16px; }
 
         .login-field label {
@@ -502,8 +535,8 @@ export default function LoginPage() {
           justify-content: center;
           gap: 10px;
           color: #fff;
-          background: linear-gradient(135deg, ${RED}, ${RED_DARK});
-          box-shadow: 0 16px 35px rgba(227,6,19,.23);
+          background: linear-gradient(135deg, ${primary}, ${secondary});
+          box-shadow: 0 16px 35px ${primary}3b;
           font: 900 13px Manrope, sans-serif;
           letter-spacing: .06em;
           text-transform: uppercase;
@@ -525,7 +558,7 @@ export default function LoginPage() {
           font-size: 11px;
         }
 
-        .login-card-footer svg { color: ${RED}; }
+        .login-card-footer svg { color: ${primary}; }
 
         @media (max-width: 980px) {
           .login-page { grid-template-columns: 1fr; overflow: auto; }

@@ -3,6 +3,7 @@ import { Outlet, NavLink, useNavigate, Link } from "react-router-dom";
 import { useOneSignal } from "@/hooks/useOneSignal";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { useBrand } from "@/context/BrandContext";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -88,6 +89,7 @@ function NavGroup({ group, onClose }) {
 
 export default function AdminLayout() {
   const { user, logout } = useAuth();
+  const { brand } = useBrand();
   useOneSignal({ restaurantId: user?.restaurant_id, enabled: !!user?.restaurant_id });
   const { } = useTheme();
   const navigate = useNavigate();
@@ -102,10 +104,14 @@ export default function AdminLayout() {
       {/* Sidebar */}
       <aside className={`fixed lg:static z-50 inset-y-0 left-0 w-64 bg-white dark:bg-[#111111] border-r border-gray-200 dark:border-gray-700 flex flex-col transition-transform duration-200 ${open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
         <div className="h-14 flex items-center gap-2.5 px-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
-          <span className="grid place-items-center w-8 h-8 rounded-lg bg-gray-900 dark:bg-gray-700 text-white">
-            <UtensilsCrossed className="w-4 h-4" />
-          </span>
-          <span className="font-display font-bold text-lg tracking-tight">Dino Menu</span>
+          {brand.logo_url ? (
+            <img src={brand.logo_url} alt={brand.name} className="w-9 h-9 rounded-lg object-contain bg-white/5 p-1" />
+          ) : (
+            <span className="grid place-items-center w-8 h-8 rounded-lg text-white" style={{ background: brand.primary_color }}>
+              <UtensilsCrossed className="w-4 h-4" />
+            </span>
+          )}
+          <span className="font-display font-bold text-lg tracking-tight truncate">{brand.short_name || brand.name}</span>
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3 scrollbar-hide">

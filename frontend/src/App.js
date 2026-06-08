@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-route
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { ThemeProvider, ForceLightMode } from "@/context/ThemeContext";
+import { BrandProvider } from "@/context/BrandContext";
 
 import LoginPage from "@/pages/LoginPage";
 import NotFound from "@/pages/NotFound";
@@ -49,9 +50,10 @@ function Protected({ children, roles }) {
 function App() {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <BrowserRouter>
-          <Routes>
+      <BrandProvider>
+        <AuthProvider>
+          <BrowserRouter>
+            <Routes>
             <Route path="/themazuki/master" element={<ForceLightMode><LoginPage /></ForceLightMode>} />
             <Route path="/loja/:slug" element={<ForceLightMode><MenuPage /></ForceLightMode>} />
             <Route path="/pedido/:order_id" element={<ForceLightMode><TrackOrder /></ForceLightMode>} />
@@ -93,10 +95,11 @@ function App() {
             </Route>
 
             <Route path="*" element={<ForceLightMode><NotFound /></ForceLightMode>} />
-          </Routes>
-          <Toaster position="top-center" richColors />
-        </BrowserRouter>
-      </AuthProvider>
+            </Routes>
+            <Toaster position="top-center" richColors />
+          </BrowserRouter>
+        </AuthProvider>
+      </BrandProvider>
     </ThemeProvider>
   );
 }

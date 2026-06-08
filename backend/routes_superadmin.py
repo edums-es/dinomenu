@@ -233,7 +233,30 @@ async def get_platform_settings(user=Depends(SUPER)):
 async def update_platform_settings(body: dict, user=Depends(SUPER)):
     """Salva configurações globais da plataforma."""
     # Remove valores mascarados para não sobrescrever com ***
-    clean = {k: v for k, v in body.items() if v != "***" and v is not None and str(v).strip() != ""}
+    white_label_keys = {
+        "platform_name",
+        "platform_short_name",
+        "platform_tagline",
+        "platform_description",
+        "platform_logo_url",
+        "platform_icon_url",
+        "platform_primary_color",
+        "platform_secondary_color",
+        "platform_accent_color",
+        "platform_login_kicker",
+        "platform_login_title",
+        "platform_login_subtitle",
+        "platform_powered_by_enabled",
+    }
+    clean = {}
+    for key, value in body.items():
+        if value == "***" or value is None:
+            continue
+        if key in white_label_keys:
+            clean[key] = value
+            continue
+        if str(value).strip() != "":
+            clean[key] = value
     if not clean:
         return {"ok": True}
     await db.platform_settings.update_one(

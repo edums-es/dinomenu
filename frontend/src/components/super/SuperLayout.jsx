@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { useBrand } from "@/context/BrandContext";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, Store, Users, LogOut, ShieldCheck,
@@ -77,6 +78,7 @@ function NavGroup({ group, onClose }) {
 
 export default function SuperLayout() {
   const { user, logout } = useAuth();
+  const { brand } = useBrand();
   const { dark } = useTheme();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -91,11 +93,15 @@ export default function SuperLayout() {
       >
         {/* Logo */}
         <div className="h-14 flex items-center gap-2.5 px-5 border-b border-white/5 shrink-0">
-          <span className="grid place-items-center w-8 h-8 rounded-lg bg-indigo-500">
-            <ShieldCheck className="w-4 h-4 text-white" />
-          </span>
+          {brand.logo_url ? (
+            <img src={brand.logo_url} alt={brand.name} className="w-9 h-9 rounded-lg object-contain bg-white/5 p-1" />
+          ) : (
+            <span className="grid place-items-center w-8 h-8 rounded-lg" style={{ background: brand.primary_color }}>
+              <ShieldCheck className="w-4 h-4 text-white" />
+            </span>
+          )}
           <div>
-            <p className="font-display font-bold text-sm leading-none text-white">Plataforma</p>
+            <p className="font-display font-bold text-sm leading-none text-white">{brand.short_name || brand.name}</p>
             <p className="text-[10px] text-gray-500">Super Admin</p>
           </div>
         </div>

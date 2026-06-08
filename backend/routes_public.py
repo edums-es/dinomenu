@@ -31,6 +31,53 @@ router = APIRouter(prefix="/api/public", tags=["public"])
 logger = logging.getLogger(__name__)
 
 
+WHITE_LABEL_DEFAULTS = {
+    "name": "Dino Menu",
+    "short_name": "Dino Menu",
+    "tagline": "Cardapio digital",
+    "description": "Cardapio digital e delivery online.",
+    "logo_url": "",
+    "icon_url": "",
+    "primary_color": "#e30613",
+    "secondary_color": "#97000a",
+    "accent_color": "#ffffff",
+    "login_kicker": "Sua operacao em campo",
+    "login_title": "Venda com raca. Gerencie com controle.",
+    "login_subtitle": "Cardapio, pedidos, caixa e clientes em uma plataforma feita para o ritmo do seu restaurante.",
+    "powered_by_enabled": True,
+}
+
+WHITE_LABEL_FIELDS = {
+    "platform_name": "name",
+    "platform_short_name": "short_name",
+    "platform_tagline": "tagline",
+    "platform_description": "description",
+    "platform_logo_url": "logo_url",
+    "platform_icon_url": "icon_url",
+    "platform_primary_color": "primary_color",
+    "platform_secondary_color": "secondary_color",
+    "platform_accent_color": "accent_color",
+    "platform_login_kicker": "login_kicker",
+    "platform_login_title": "login_title",
+    "platform_login_subtitle": "login_subtitle",
+    "platform_powered_by_enabled": "powered_by_enabled",
+}
+
+
+def public_white_label_config(settings: dict | None = None) -> dict:
+    settings = settings or {}
+    brand = dict(WHITE_LABEL_DEFAULTS)
+    for source_key, target_key in WHITE_LABEL_FIELDS.items():
+        value = settings.get(source_key)
+        if value is None:
+            continue
+        if isinstance(value, str) and not value.strip():
+            continue
+        brand[target_key] = value
+    brand["powered_by_enabled"] = str(brand.get("powered_by_enabled")).lower() not in ("false", "0", "no")
+    return brand
+
+
 def _region_from_address(address: dict) -> dict:
     neighborhood = (
         address.get("suburb")
@@ -74,12 +121,13 @@ def _client_public_ip(request: Request) -> str | None:
 
 @router.get("/platform-config")
 async def public_platform_config():
-    from routes_superadmin import get_platform_setting
-    app_id = await get_platform_setting("onesignal_app_id", "")
-    push_enabled = await get_platform_setting("push_notifications_enabled", "true")
+    cfg = await db.platform_settings.find_one({"_id": "global"}, {"_id": 0}) or {}
+    app_id = cfg.get("onesignal_app_id") or os.environ.get("ONESIGNAL_APP_ID", "")
+    push_enabled = cfg.get("push_notifications_enabled", os.environ.get("PUSH_NOTIFICATIONS_ENABLED", "true"))
     return {
         "onesignal_app_id": app_id,
         "push_enabled": str(push_enabled).lower() not in ("false", "0", ""),
+        "brand": public_white_label_config(cfg),
     }
 
 
@@ -165,14 +213,16 @@ def _frontend_base_url(request: Request) -> str:
 @router.get("/restaurants/{slug}/share", response_class=HTMLResponse)
 async def restaurant_share_preview(slug: str, request: Request):
     r = await _get_restaurant_or_404(slug)
-    name = html.escape(r.get("name") or "Dino Menu")
+    brand = public_white_label_config(await db.platform_settings.find_one({"_id": "global"}, {"_id": 0}) or {})
+    name = html.escape(r.get("name") or brand.get("name") or "Dino Menu")
+    site_name = html.escape(brand.get("name") or "Dino Menu")
     description = html.escape(
         r.get("tagline")
         or r.get("description")
         or "Acesse o cardapio digital e faca seu pedido online."
     )
     frontend_base = _frontend_base_url(request)
-    image = _absolute_url(r.get("cover_url") or r.get("logo_url") or f"{frontend_base}/dinomenu-share.svg", request)
+    image = _absolute_url(r.get("cover_url") or r.get("logo_url") or brand.get("logo_url") or f"{frontend_base}/dinomenu-share.svg", request)
     url = f"{frontend_base}/loja/{html.escape(slug)}"
     safe_url = html.escape(url, quote=True)
     redirect_url = json.dumps(url)
@@ -192,7 +242,7 @@ async def restaurant_share_preview(slug: str, request: Request):
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="600" />
     <meta property="og:url" content="{safe_url}" />
-    <meta property="og:site_name" content="Dino Menu" />
+    <meta property="og:site_name" content="{site_name}" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="{name}" />
     <meta name="twitter:description" content="{description}" />

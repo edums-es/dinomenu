@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { toast } from "sonner";
 import { CartProvider, useCart } from "@/context/CartContext";
+import { useBrand } from "@/context/BrandContext";
 import api, { API } from "@/lib/api";
 import { brl } from "@/lib/format";
 import ProductDrawer from "@/components/public/ProductDrawer";
@@ -159,6 +160,7 @@ function ReviewsTab({ slug, reviews, summary, accent, textColor = "#FFFFFF", mut
 
 /* ── Main MenuContent ── */
 function MenuContent({ data, slug }) {
+  const { brand } = useBrand();
   const { restaurant, categories, products, banners, combos, reviews, reviews_summary } = data;
   const { count, subtotal, addItem } = useCart();
   const [tab, setTab] = useState("cardapio");
@@ -459,18 +461,20 @@ function MenuContent({ data, slug }) {
       <ProductDrawer product={selectedProduct} open={!!selectedProduct} onOpenChange={o => !o && setSelectedProduct(null)} onAdd={addItem} themeVars={themeVars}/>
       <CartSheet open={cartOpen} onOpenChange={setCartOpen} restaurant={restaurant} slug={slug} products={products}/>
 
-      {/* Dino Menu footer */}
-      <div style={{textAlign:"center",padding:"16px 0 24px",borderTop:"1px solid #1a1a1a",marginTop:8}}>
-        <span style={{fontSize:14,fontWeight:600,fontFamily:"Manrope,sans-serif",color:"#777"}}>
-          Cardapio digital por <span style={{color:accent}}>Dino Menu</span>
-        </span>
-      </div>
+      {brand.powered_by_enabled && (
+        <div style={{textAlign:"center",padding:"16px 0 24px",borderTop:"1px solid #1a1a1a",marginTop:8}}>
+          <span style={{fontSize:14,fontWeight:600,fontFamily:"Manrope,sans-serif",color:"#777"}}>
+            Cardapio digital por <span style={{color:accent}}>{brand.short_name || brand.name}</span>
+          </span>
+        </div>
+      )}
     </div>
   );
 }
 
 export default function MenuPage() {
   const { slug } = useParams();
+  const { brand } = useBrand();
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
 
@@ -481,7 +485,7 @@ export default function MenuPage() {
         const restaurant = res.data.restaurant;
         cacheRestaurant(slug, restaurant);
         const title = `${restaurant.name} - Cardapio`;
-        const description = restaurant.tagline || restaurant.description || "Cardapio digital Dino Menu";
+        const description = restaurant.tagline || restaurant.description || `Cardapio digital ${brand.short_name || brand.name}`;
         document.title = title;
         [
           ["description", description],
@@ -500,7 +504,7 @@ export default function MenuPage() {
         }
       })
       .catch(() => setError(true));
-  }, [slug]);
+  }, [slug, brand.name, brand.short_name]);
 
   if (error) return (
     <div className="min-h-screen grid place-items-center text-center px-6" style={{background:"#0A0A0A"}}>
