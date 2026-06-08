@@ -591,14 +591,14 @@ export default function LoginPage() {
           grid-template-columns: minmax(520px, 52%) 1fr;
           background:
             radial-gradient(circle at 78% 70%, ${primary}24, transparent 28%),
-            #020806;
+            #050505;
         }
 
         .login-template-modern .login-showcase {
           padding: 48px;
           background:
             radial-gradient(circle at 80% 78%, ${primary}38, transparent 35%),
-            linear-gradient(135deg, #000 0%, #03100b 100%);
+            linear-gradient(135deg, #000 0%, #080808 100%);
           border-right-color: ${primary}26;
         }
 
@@ -674,7 +674,7 @@ export default function LoginPage() {
         .login-template-modern .login-access {
           background:
             radial-gradient(circle at 20% 30%, ${primary}18, transparent 26%),
-            #020806;
+            #050505;
         }
 
         .login-template-modern .login-access-head {
@@ -685,7 +685,7 @@ export default function LoginPage() {
           border: 1px solid rgba(255,255,255,.14);
           border-radius: 22px;
           border-top: 1px solid rgba(255,255,255,.14);
-          background: linear-gradient(145deg, rgba(29, 58, 44, .88), rgba(10, 18, 14, .95));
+          background: linear-gradient(145deg, rgba(25,25,25,.94), rgba(9,9,9,.97));
           box-shadow: 0 36px 100px rgba(0,0,0,.72), 0 0 90px ${primary}1f;
         }
 
@@ -715,13 +715,13 @@ export default function LoginPage() {
         }
 
         .login-template-modern .login-tabs button.is-active {
-          color: #05110c;
+          color: #050505;
           background: ${primary};
         }
 
         .login-template-modern .login-submit {
           border-radius: 10px;
-          color: #05110c;
+          color: #050505;
           background: linear-gradient(135deg, ${primary}, ${secondary});
         }
 
