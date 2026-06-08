@@ -162,6 +162,7 @@ export default function PlatformSettings() {
         "platform_primary_color",
         "platform_secondary_color",
         "platform_accent_color",
+        "platform_login_accent_color",
         "platform_login_kicker",
         "platform_login_title",
         "platform_login_subtitle",
@@ -300,16 +301,26 @@ export default function PlatformSettings() {
         </div>
 
         <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
+          <div className="max-w-sm mb-5">
+            <ColorField
+              label="Cor de destaque do login"
+              value={settings.platform_login_accent_color || ""}
+              onChange={set("platform_login_accent_color")}
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              Controla especificamente os botoes, icones, linhas e brilhos da pagina de login.
+            </p>
+          </div>
           <div className="mb-3">
             <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Template da pagina de login</p>
             <p className="text-xs text-gray-400 mt-1">
-              Os botoes, linhas e brilhos do login usam a cor primaria acima.
+              Os templates abaixo usam a cor de destaque do login.
             </p>
           </div>
           <div className="grid sm:grid-cols-3 gap-3">
             {LOGIN_TEMPLATES.map((template) => {
               const selected = (settings.platform_login_template || brand.login_template || "sport") === template.value;
-              const selectedColor = settings.platform_primary_color || brand.primary_color || "#e30613";
+              const selectedColor = settings.platform_login_accent_color || brand.login_accent_color || settings.platform_primary_color || brand.primary_color || "#e30613";
               return (
                 <button
                   key={template.value}

@@ -6,6 +6,7 @@ def test_public_white_label_config_uses_defaults_and_allowed_fields():
         "platform_name": "Minha Marca",
         "platform_short_name": "Marca",
         "platform_primary_color": "#123456",
+        "platform_login_accent_color": "#22e39b",
         "platform_login_template": "modern",
         "onesignal_api_key": "secret",
         "platform_powered_by_enabled": "false",
@@ -14,6 +15,7 @@ def test_public_white_label_config_uses_defaults_and_allowed_fields():
     assert brand["name"] == "Minha Marca"
     assert brand["short_name"] == "Marca"
     assert brand["primary_color"] == "#123456"
+    assert brand["login_accent_color"] == "#22e39b"
     assert brand["login_template"] == "modern"
     assert brand["tagline"] == "Cardapio digital"
     assert brand["powered_by_enabled"] is False

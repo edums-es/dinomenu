@@ -243,6 +243,7 @@ async def update_platform_settings(body: dict, user=Depends(SUPER)):
         "platform_primary_color",
         "platform_secondary_color",
         "platform_accent_color",
+        "platform_login_accent_color",
         "platform_login_kicker",
         "platform_login_title",
         "platform_login_subtitle",

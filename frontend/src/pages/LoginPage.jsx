@@ -62,8 +62,9 @@ export default function LoginPage() {
   }, [user, navigate]);
 
   const focusInput = (event) => {
-    event.target.style.borderColor = brand.primary_color || RED;
-    event.target.style.boxShadow = `0 0 0 3px ${brand.primary_color || RED}2e`;
+    const loginAccent = brand.login_accent_color || brand.primary_color || RED;
+    event.target.style.borderColor = loginAccent;
+    event.target.style.boxShadow = `0 0 0 3px ${loginAccent}2e`;
     event.target.style.background = softInput ? "#f3f7ff" : "#171717";
   };
 
@@ -101,8 +102,8 @@ export default function LoginPage() {
     }
   };
 
-  const primary = brand.primary_color || RED;
-  const secondary = brand.secondary_color || RED_DARK;
+  const primary = brand.login_accent_color || brand.primary_color || RED;
+  const secondary = brand.login_accent_color || brand.secondary_color || RED_DARK;
   const accent = brand.accent_color || "#ffffff";
   const template = ["sport", "modern", "minimal"].includes(brand.login_template) ? brand.login_template : "sport";
   const softInput = template === "modern" || template === "minimal";

@@ -11,6 +11,7 @@ export const DEFAULT_BRAND = {
   primary_color: "#e30613",
   secondary_color: "#97000a",
   accent_color: "#ffffff",
+  login_accent_color: "",
   login_kicker: "Sua operacao em campo",
   login_title: "Venda com raca. Gerencie com controle.",
   login_subtitle: "Cardapio, pedidos, caixa e clientes em uma plataforma feita para o ritmo do seu restaurante.",
