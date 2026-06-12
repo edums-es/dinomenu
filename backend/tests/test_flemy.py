@@ -1,10 +1,15 @@
 import pytest
 
-from flemy import normalize_phone, public_order, safe_webhook_url
+from flemy import normalize_phone, public_order, safe_webhook_url, whatsapp_phone
 
 
 def test_normalize_phone_uses_suffix_for_customer_matching():
     assert normalize_phone("+55 (27) 99999-1234") == "99991234"
+
+
+def test_whatsapp_phone_adds_brazil_country_code():
+    assert whatsapp_phone("(27) 99999-1234") == "5527999991234"
+    assert whatsapp_phone("+55 (27) 99999-1234") == "5527999991234"
 
 
 def test_safe_webhook_url_rejects_local_targets():
@@ -25,4 +30,5 @@ def test_public_order_exposes_only_automation_contract():
 
     assert result["number"] == 42
     assert result["customer"] == {"name": "Ana", "phone": "27999991234"}
+    assert result["tracking_url"].endswith("/pedido/order-1")
     assert "internal_secret" not in result

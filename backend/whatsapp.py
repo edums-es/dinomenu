@@ -160,6 +160,17 @@ async def notify_order_status(order, new_status):
             restaurant=restaurant.get("name", ""),
             tracking_url=tracking_url,
         )
+        if restaurant.get("flemy_push_status_notifications"):
+            from flemy import send_flemy_push
+            sent = await send_flemy_push(
+                restaurant,
+                customer_phone,
+                msg,
+                f"order:{order.get('id', '')}:status:{new_status}",
+            )
+            if sent:
+                return
+            logger.warning("[WA] Flemy Push falhou; usando provider Start como fallback")
         await send_whatsapp(restaurant, customer_phone, msg)
     except Exception as e:
         logger.error(f"[WA] Erro ao enviar status {new_status} para pedido {order.get('id')}: {e}")

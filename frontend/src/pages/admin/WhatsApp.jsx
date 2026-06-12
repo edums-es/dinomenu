@@ -61,6 +61,8 @@ export default function WhatsApp() {
   const [flemy, setFlemy] = useState({ enabled: false, webhook_url: "", webhook_secret: "", api_token: "", events: [] });
   const [savingFlemy, setSavingFlemy] = useState(false);
   const [testingFlemy, setTestingFlemy] = useState(false);
+  const [testingFlemyPush, setTestingFlemyPush] = useState(false);
+  const [flemyTestPhone, setFlemyTestPhone] = useState("");
   const [flemyLogs, setFlemyLogs] = useState([]);
   const pollRef = useRef(null);
 
@@ -222,6 +224,20 @@ export default function WhatsApp() {
       toast.error(e?.response?.data?.detail || "Falha no teste Flemy");
     } finally {
       setTestingFlemy(false);
+    }
+  };
+
+  const testFlemyPush = async () => {
+    if (!flemyTestPhone.trim()) { toast.warning("Informe um telefone para testar o Push"); return; }
+    setTestingFlemyPush(true);
+    try {
+      await api.post("/integrations/flemy/test-push", { phone: flemyTestPhone });
+      toast.success("Mensagem enviada pelo Push da Flemy!");
+      await loadFlemy();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Falha no Push Flemy");
+    } finally {
+      setTestingFlemyPush(false);
     }
   };
 
@@ -478,6 +494,69 @@ export default function WhatsApp() {
             </div>
           </div>
 
+          <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold dark:text-white">Push autenticado Flemy</p>
+                <p className="text-xs text-gray-400 mt-0.5">Envia mensagens e cria/movimenta tickets no CRM usando a API oficial de Push.</p>
+              </div>
+              <Switch checked={!!flemy.push_enabled} onCheckedChange={(push_enabled) => setFlemy((f) => ({ ...f, push_enabled }))} />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium dark:text-white block mb-1.5">URL autenticada do Push</label>
+              <Input value={flemy.push_url || ""} onChange={(e) => setFlemy((f) => ({ ...f, push_url: e.target.value }))}
+                placeholder="Cole a URL gerada em Configuracoes > API/Webhook"
+                className="font-mono text-xs dark:bg-[#0D1117] dark:border-gray-700" />
+              <p className="text-xs text-gray-400 mt-1">Na Flemy: Configuracoes &gt; API/Webhook &gt; Adicionar &gt; Url ou endpoint autenticado.</p>
+            </div>
+
+            <label className="flex items-center justify-between gap-4 rounded-xl border border-gray-100 dark:border-gray-800 px-3 py-3">
+              <span>
+                <span className="block text-sm font-medium dark:text-white">Notificar status pelo CRM</span>
+                <span className="block text-xs text-gray-400 mt-0.5">Se o Push falhar, a Evolution API continua como fallback.</span>
+              </span>
+              <Switch checked={!!flemy.push_status_notifications} onCheckedChange={(push_status_notifications) => setFlemy((f) => ({ ...f, push_status_notifications }))} />
+            </label>
+
+            <div className="grid sm:grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Chatbot ID</label>
+                <Input value={flemy.push_chatbot_id || ""} onChange={(e) => setFlemy((f) => ({ ...f, push_chatbot_id: e.target.value }))}
+                  placeholder="Opcional" className="dark:bg-[#0D1117] dark:border-gray-700" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Departamento / Queue ID</label>
+                <Input value={flemy.push_queue_id || ""} onChange={(e) => setFlemy((f) => ({ ...f, push_queue_id: e.target.value }))}
+                  placeholder="Opcional" className="dark:bg-[#0D1117] dark:border-gray-700" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Atendente / User ID</label>
+                <Input value={flemy.push_user_id || ""} onChange={(e) => setFlemy((f) => ({ ...f, push_user_id: e.target.value }))}
+                  placeholder="Opcional" className="dark:bg-[#0D1117] dark:border-gray-700" />
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-2">
+              <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-100 dark:border-gray-800 px-3 py-2 text-sm dark:text-gray-300">
+                Forcar para departamento
+                <Switch checked={!!flemy.push_force_department} onCheckedChange={(push_force_department) => setFlemy((f) => ({ ...f, push_force_department }))} />
+              </label>
+              <label className="flex items-center justify-between gap-3 rounded-xl border border-gray-100 dark:border-gray-800 px-3 py-2 text-sm dark:text-gray-300">
+                Forcar para atendente
+                <Switch checked={!!flemy.push_force_user} onCheckedChange={(push_force_user) => setFlemy((f) => ({ ...f, push_force_user }))} />
+              </label>
+            </div>
+
+            <div className="flex gap-2">
+              <Input value={flemyTestPhone} onChange={(e) => setFlemyTestPhone(e.target.value)}
+                placeholder="Telefone para testar o Push" className="dark:bg-[#0D1117] dark:border-gray-700" />
+              <Button variant="outline" onClick={testFlemyPush} disabled={testingFlemyPush || !flemy.push_enabled} className="gap-2 shrink-0">
+                {testingFlemyPush ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Testar Push
+              </Button>
+            </div>
+          </div>
+
           {flemy.api_token && (
             <div className="space-y-3 pt-4 border-t border-gray-100 dark:border-gray-800">
               <p className="text-sm font-semibold dark:text-white">Ferramentas para o Agente IA / bloco API</p>
@@ -489,7 +568,7 @@ export default function WhatsApp() {
                 </div>
               </div>
               <div>
-                <label className="text-xs text-gray-400 block mb-1">Header X-Flemy-Token</label>
+                <label className="text-xs text-gray-400 block mb-1">Token Bearer ou header X-Flemy-Token</label>
                 <div className="flex gap-2">
                   <Input readOnly value={flemy.api_token} className="font-mono text-xs dark:bg-[#0D1117] dark:border-gray-700" />
                   <Button variant="outline" size="icon" onClick={() => copyText(flemy.api_token, "Token copiado")}><Copy className="w-4 h-4" /></Button>
