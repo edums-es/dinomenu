@@ -23,6 +23,7 @@ import routes_advanced
 import routes_billing
 import routes_whatsapp
 import routes_printing
+import routes_flemy
 from seed import seed
 
 logging.basicConfig(level=logging.INFO,
@@ -54,6 +55,7 @@ app.include_router(routes_billing.router)
 app.include_router(routes_ws.router)
 app.include_router(routes_whatsapp.router)
 app.include_router(routes_printing.router)
+app.include_router(routes_flemy.router)
 
 def get_cors_origins() -> list[str]:
     configured = os.environ.get(

@@ -629,6 +629,7 @@ async def create_order(slug: str, order: OrderIn):
         "discount": calculated["discount"],
         "total": final_total,
         "customer_phone_suffix": "".join(ch for ch in (order.customer.phone or "") if ch.isdigit())[-8:],
+        "stock_reservations": calculated["reservations"],
         "order_number": order_number,
         "status": "pending",
         "payment_status": "pending",
@@ -726,6 +727,10 @@ async def create_order(slug: str, order: OrderIn):
         asyncio.create_task(_notify_new_order(r, clean(doc), OrderIn.model_validate(doc), pix_via_openpix=False))
 
     result = clean(doc)
+    from flemy import emit_flemy_event
+    asyncio.create_task(emit_flemy_event(r, "order.created", result))
+    if is_pix_auto and pix_charge:
+        asyncio.create_task(emit_flemy_event(r, "payment.pending", result))
     if pix_charge:
         result["pix_charge"] = pix_charge
     return result
@@ -797,6 +802,8 @@ async def openpix_webhook(request: Request):
         # Notifica cliente via WhatsApp que pedido foi aceito
         from whatsapp import notify_order_status
         asyncio.create_task(notify_order_status(updated_order, "accepted"))
+        from flemy import emit_flemy_event
+        asyncio.create_task(emit_flemy_event(restaurant, "payment.paid", updated_order))
 
     return JSONResponse({"ok": True})
 
@@ -931,6 +938,8 @@ async def check_pix_payment(order_id: str):
                     ))
                     from whatsapp import notify_order_status
                     asyncio.create_task(notify_order_status(updated, "accepted"))
+                    from flemy import emit_flemy_event
+                    asyncio.create_task(emit_flemy_event(restaurant, "payment.paid", updated))
                 return {"payment_status": "paid", "order_status": "accepted"}
     except Exception as e:
         logger.error(f"[check-pix] erro: {e}")

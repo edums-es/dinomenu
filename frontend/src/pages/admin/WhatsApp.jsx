@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import api from "@/lib/api";
+import api, { API } from "@/lib/api";
 import { toast } from "sonner";
 import {
   MessageCircle, Wifi, WifiOff, RefreshCw, Trash2, Send,
   CheckCircle2, XCircle, Loader2, Info, Bell, Phone, Key, ExternalLink,
+  Bot, Copy, Webhook,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +58,10 @@ export default function WhatsApp() {
   const [testLoading, setTestLoading]   = useState(false);
   const [kiraToken, setKiraToken]       = useState("");
   const [savingToken, setSavingToken]   = useState(false);
+  const [flemy, setFlemy] = useState({ enabled: false, webhook_url: "", webhook_secret: "", api_token: "", events: [] });
+  const [savingFlemy, setSavingFlemy] = useState(false);
+  const [testingFlemy, setTestingFlemy] = useState(false);
+  const [flemyLogs, setFlemyLogs] = useState([]);
   const pollRef = useRef(null);
 
   const loadProvider = useCallback(async () => {
@@ -83,11 +88,21 @@ export default function WhatsApp() {
     } catch {}
   }, []);
 
+  const loadFlemy = useCallback(async () => {
+    try {
+      const r = await api.get("/integrations/flemy/settings");
+      setFlemy((current) => ({ ...current, ...r.data, webhook_secret: "" }));
+      const logs = await api.get("/integrations/flemy/logs");
+      setFlemyLogs(logs.data || []);
+    } catch {}
+  }, []);
+
   useEffect(() => {
     loadProvider();
     checkStatus();
     loadSettings();
-  }, [loadProvider, checkStatus, loadSettings]);
+    loadFlemy();
+  }, [loadProvider, checkStatus, loadSettings, loadFlemy]);
 
   // Polling quando QR visivel ou conectando
   useEffect(() => {
@@ -182,6 +197,37 @@ export default function WhatsApp() {
     } finally {
       setTestLoading(false);
     }
+  };
+
+  const saveFlemy = async () => {
+    setSavingFlemy(true);
+    try {
+      const { data } = await api.put("/integrations/flemy/settings", flemy);
+      setFlemy((current) => ({ ...current, ...data, webhook_secret: "" }));
+      toast.success("Integracao Flemy salva!");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Erro ao salvar Flemy");
+    } finally {
+      setSavingFlemy(false);
+    }
+  };
+
+  const testFlemy = async () => {
+    setTestingFlemy(true);
+    try {
+      await api.post("/integrations/flemy/test");
+      toast.success("Evento de teste entregue a Flemy!");
+      await loadFlemy();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Falha no teste Flemy");
+    } finally {
+      setTestingFlemy(false);
+    }
+  };
+
+  const copyText = async (value, message) => {
+    await navigator.clipboard.writeText(value);
+    toast.success(message);
   };
 
   const isConnected = status === "connected";
@@ -373,6 +419,114 @@ export default function WhatsApp() {
           </div>
         </div>
       )}
+
+      {/* Flemy CRM */}
+      <div className="bg-white dark:bg-[#111111] rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
+          <div className="flex items-center gap-3">
+            <span className="grid place-items-center w-9 h-9 rounded-xl bg-violet-100 dark:bg-violet-900/30">
+              <Bot className="w-4 h-4 text-violet-600" />
+            </span>
+            <div>
+              <p className="font-semibold text-sm dark:text-white">Flemy CRM / Automacao Plus</p>
+              <p className="text-xs text-gray-500 mt-0.5">Pedidos, cancelamentos, ofertas e atendimento inteligente</p>
+            </div>
+          </div>
+          <Switch checked={!!flemy.enabled} onCheckedChange={(enabled) => setFlemy((f) => ({ ...f, enabled }))} />
+        </div>
+
+        <div className="p-6 space-y-5">
+          <div className="flex items-start gap-3 bg-violet-50 dark:bg-violet-900/15 border border-violet-200 dark:border-violet-800 rounded-xl p-4">
+            <Webhook className="w-4 h-4 text-violet-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-violet-700 dark:text-violet-300">
+              Cole abaixo a URL publica gerada pelo bloco <strong>Receber Webhook</strong> da Flemy. O Dino Menu enviara eventos estruturados e assinados para iniciar seus fluxos.
+            </p>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium dark:text-white block mb-1.5">URL do Receber Webhook Flemy</label>
+            <Input value={flemy.webhook_url || ""} onChange={(e) => setFlemy((f) => ({ ...f, webhook_url: e.target.value }))}
+              placeholder="https://...webhook..."
+              className="font-mono text-xs dark:bg-[#0D1117] dark:border-gray-700" />
+          </div>
+          <div>
+            <label className="text-sm font-medium dark:text-white block mb-1.5">Segredo de assinatura</label>
+            <Input type="password" value={flemy.webhook_secret || ""} onChange={(e) => setFlemy((f) => ({ ...f, webhook_secret: e.target.value }))}
+              placeholder={flemy.has_webhook_secret ? "Ja configurado - preencha apenas para trocar" : "Crie um segredo forte"}
+              className="font-mono text-xs dark:bg-[#0D1117] dark:border-gray-700" />
+            <p className="text-xs text-gray-400 mt-1">Enviado no header X-Dino-Signature usando HMAC SHA-256.</p>
+          </div>
+
+          <div>
+            <p className="text-sm font-medium dark:text-white mb-2">Eventos enviados para a Flemy</p>
+            <div className="grid sm:grid-cols-2 gap-2">
+              {[
+                ["order.created", "Pedido criado"],
+                ["order.status_changed", "Status alterado"],
+                ["order.cancelled", "Pedido cancelado"],
+                ["payment.pending", "Pix aguardando"],
+                ["payment.paid", "Pagamento confirmado"],
+              ].map(([event, label]) => (
+                <label key={event} className="flex items-center justify-between gap-3 rounded-xl border border-gray-100 dark:border-gray-800 px-3 py-2 text-sm dark:text-gray-300">
+                  {label}
+                  <Switch checked={(flemy.events || []).includes(event)} onCheckedChange={() => setFlemy((f) => ({
+                    ...f,
+                    events: (f.events || []).includes(event) ? f.events.filter((x) => x !== event) : [...(f.events || []), event],
+                  }))} />
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {flemy.api_token && (
+            <div className="space-y-3 pt-4 border-t border-gray-100 dark:border-gray-800">
+              <p className="text-sm font-semibold dark:text-white">Ferramentas para o Agente IA / bloco API</p>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Endpoint POST</label>
+                <div className="flex gap-2">
+                  <Input readOnly value={`${API.replace(/\/api$/, "")}${flemy.tool_url}`} className="font-mono text-xs dark:bg-[#0D1117] dark:border-gray-700" />
+                  <Button variant="outline" size="icon" onClick={() => copyText(`${API.replace(/\/api$/, "")}${flemy.tool_url}`, "Endpoint copiado")}><Copy className="w-4 h-4" /></Button>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Header X-Flemy-Token</label>
+                <div className="flex gap-2">
+                  <Input readOnly value={flemy.api_token} className="font-mono text-xs dark:bg-[#0D1117] dark:border-gray-700" />
+                  <Button variant="outline" size="icon" onClick={() => copyText(flemy.api_token, "Token copiado")}><Copy className="w-4 h-4" /></Button>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400">
+                Acoes disponiveis: get_order_status, get_customer_orders, cancel_order, get_menu, get_offers e get_restaurant_info.
+              </p>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={testFlemy} disabled={testingFlemy || !flemy.enabled} className="gap-2">
+              {testingFlemy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Testar
+            </Button>
+            <Button onClick={saveFlemy} disabled={savingFlemy} className="gap-2">
+              {savingFlemy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Salvar Flemy
+            </Button>
+          </div>
+
+          {flemyLogs.length > 0 && (
+            <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
+              <p className="text-sm font-semibold dark:text-white mb-2">Ultimos eventos</p>
+              <div className="space-y-2">
+                {flemyLogs.slice(0, 5).map((log) => (
+                  <div key={log.id} className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 dark:bg-[#0D1117] px-3 py-2 text-xs">
+                    <span className="font-mono text-gray-600 dark:text-gray-300">{log.event}</span>
+                    <span className={log.status === "sent" ? "text-green-500" : "text-red-500"}>
+                      {log.status === "sent" ? `Entregue (${log.http_status})` : `Falhou${log.http_status ? ` (${log.http_status})` : ""}`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

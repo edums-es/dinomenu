@@ -12,6 +12,8 @@ from auth import require_restaurant
 from whatsapp import notify_order_status
 from routes_ws import broadcast as ws_broadcast
 from routes_printing import enqueue_print_job
+from flemy import emit_flemy_event
+from order_security import release_stock
 from models import (
     CategoryIn, ProductIn, CouponIn, BannerIn, RestaurantSettings, StatusUpdate,
     ORDER_STATUSES, clean, new_id, now_iso, is_restaurant_open,
@@ -341,16 +343,34 @@ async def get_order(oid: str, user=Depends(require_restaurant)):
 async def update_order_status(oid: str, data: StatusUpdate, user=Depends(require_restaurant)):
     if data.status not in ORDER_STATUSES:
         raise HTTPException(status_code=400, detail="Status inválido")
+    previous_order = await db.orders.find_one({"id": oid, "restaurant_id": rid(user)}, {"_id": 0})
+    if not previous_order:
+        raise HTTPException(status_code=404, detail="Pedido nao encontrado")
     res = await db.orders.update_one(
         {"id": oid, "restaurant_id": rid(user)},
         {"$set": {"status": data.status, "updated_at": now_iso()}})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Pedido não encontrado")
     order = await db.orders.find_one({"id": oid, "restaurant_id": rid(user)}, {"_id": 0})
+    if (
+        data.status == "cancelled"
+        and previous_order.get("status") in {"pending", "accepted"}
+        and order.get("stock_reservations")
+        and not order.get("stock_released_at")
+    ):
+        await release_stock(db, order["restaurant_id"], order["stock_reservations"])
+        await db.orders.update_one(
+            {"id": oid, "restaurant_id": rid(user)},
+            {"$set": {"stock_released_at": now_iso()}},
+        )
+        order["stock_released_at"] = now_iso()
     # Fire-and-forget WhatsApp notification
     asyncio.create_task(notify_order_status(order, data.status))
     asyncio.create_task(enqueue_print_job(order, "auto_status"))
     asyncio.create_task(ws_broadcast(order['restaurant_id'], 'order_updated', {'id': order['id'], 'status': data.status}))
+    restaurant = await db.restaurants.find_one({"id": order["restaurant_id"]}, {"_id": 0})
+    event = "order.cancelled" if data.status == "cancelled" else "order.status_changed"
+    asyncio.create_task(emit_flemy_event(restaurant, event, order, {"new_status": data.status}))
     return order
 
 
