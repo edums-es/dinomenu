@@ -8,7 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, FolderTree, GripVertical, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, FolderTree, GripVertical, Loader2, ChevronUp, ChevronDown } from "lucide-react";
 
 const EMPTY = { name: "", icon: "", sort_order: 0, is_active: true };
 
@@ -93,6 +93,18 @@ export default function Categories() {
     persistOrder(latestItemsRef.current);
   };
 
+  const moveCategory = async (categoryId, delta) => {
+    const next = [...items];
+    const fromIndex = next.findIndex((item) => item.id === categoryId);
+    const toIndex = fromIndex + delta;
+    if (fromIndex < 0 || toIndex < 0 || toIndex >= next.length) return;
+    [next[fromIndex], next[toIndex]] = [next[toIndex], next[fromIndex]];
+    const ordered = next.map((item, index) => ({ ...item, sort_order: index + 1 }));
+    latestItemsRef.current = ordered;
+    setItems(ordered);
+    await persistOrder(ordered);
+  };
+
   return (
     <div className="space-y-5" data-testid="admin-categories">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -150,6 +162,10 @@ export default function Categories() {
                 </div>
               </div>
               <div className="flex gap-1">
+                <div className="flex sm:hidden">
+                  <Button size="icon" variant="ghost" onClick={() => moveCategory(c.id, -1)} disabled={items[0]?.id === c.id} aria-label="Subir categoria"><ChevronUp className="w-4 h-4" /></Button>
+                  <Button size="icon" variant="ghost" onClick={() => moveCategory(c.id, 1)} disabled={items[items.length - 1]?.id === c.id} aria-label="Descer categoria"><ChevronDown className="w-4 h-4" /></Button>
+                </div>
                 <Button
                   size="icon"
                   variant="ghost"

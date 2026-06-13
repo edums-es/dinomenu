@@ -188,7 +188,7 @@ export default function Settings() {
   return (
     <div className="space-y-5" data-testid="admin-settings">
       {/* Sticky header — dark mode corrected */}
-      <div className="flex items-center justify-between sticky top-0 bg-gray-50 dark:bg-[#0A0A0A] py-2 z-10 border-b border-transparent dark:border-gray-800">
+      <div className="flex flex-wrap items-center justify-between gap-3 sticky top-0 bg-gray-50 dark:bg-[#0A0A0A] py-2 z-10 border-b border-transparent dark:border-gray-800">
         <h1 className="font-display font-bold text-2xl text-gray-900 dark:text-white">Configurações</h1>
         <Button
           onClick={save} disabled={saving} data-testid="save-settings"

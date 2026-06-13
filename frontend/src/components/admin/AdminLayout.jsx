@@ -100,7 +100,7 @@ export default function AdminLayout() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#0A0A0A] font-admin text-gray-900 dark:text-gray-100 flex overflow-hidden">
+    <div className="admin-shell min-h-[100dvh] bg-gray-50 dark:bg-[#0A0A0A] font-admin text-gray-900 dark:text-gray-100 flex overflow-hidden">
       {/* Sidebar */}
       <aside className={`fixed lg:static z-50 inset-y-0 left-0 w-64 bg-white dark:bg-[#111111] border-r border-gray-200 dark:border-gray-700 flex flex-col transition-transform duration-200 ${open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
         <div className="h-14 flex items-center gap-2.5 px-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
@@ -135,8 +135,8 @@ export default function AdminLayout() {
       {open && <div className="fixed inset-0 bg-black/40 z-40 lg:hidden" onClick={() => setOpen(false)} />}
 
       <div className="flex-1 min-w-0 flex flex-col max-w-full">
-        <header className="h-14 bg-white dark:bg-[#111111] border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 sticky top-0 z-30">
-          <button className="lg:hidden text-gray-500 dark:text-gray-400" onClick={() => setOpen(!open)}>
+        <header className="h-14 min-h-14 bg-white dark:bg-[#111111] border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 sticky top-0 z-30">
+          <button className="lg:hidden min-h-11 min-w-11 -ml-2 grid place-items-center text-gray-500 dark:text-gray-400" onClick={() => setOpen(!open)}>
             {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
           <div className="flex-1" />
@@ -150,7 +150,7 @@ export default function AdminLayout() {
             </div>
           </div>
         </header>
-        <main className="flex-1 w-full max-w-full p-3 sm:p-4 lg:p-6 overflow-y-auto overflow-x-hidden">
+        <main className="admin-content flex-1 w-full max-w-full p-3 sm:p-4 lg:p-6 overflow-y-auto overflow-x-hidden">
           <div className="w-full max-w-full min-w-0">
             <Outlet />
           </div>

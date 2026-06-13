@@ -14,7 +14,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import ImageUpload from "@/components/admin/ImageUpload";
-import { Plus, Pencil, Trash2, UtensilsCrossed, X, Download, Upload, Search, SlidersHorizontal, GripVertical, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, UtensilsCrossed, X, Download, Upload, Search, SlidersHorizontal, GripVertical, Loader2, ChevronUp, ChevronDown } from "lucide-react";
 
 const EMPTY = {
   name: "", description: "", image_url: null, price: 0, promotional_price: null,
@@ -150,6 +150,22 @@ export default function Products() {
     });
   };
 
+  const moveProduct = async (productId, delta) => {
+    const visible = [...filteredItems];
+    const fromIndex = visible.findIndex((item) => item.id === productId);
+    const toIndex = fromIndex + delta;
+    if (fromIndex < 0 || toIndex < 0 || toIndex >= visible.length) return;
+    [visible[fromIndex], visible[toIndex]] = [visible[toIndex], visible[fromIndex]];
+    latestVisibleRef.current = visible;
+    setItems((current) => {
+      const positions = new Map(visible.map((item, index) => [item.id, index]));
+      const affected = current.filter((item) => positions.has(item.id)).sort((a, b) => positions.get(a.id) - positions.get(b.id));
+      let index = 0;
+      return current.map((item) => positions.has(item.id) ? affected[index++] : item);
+    });
+    await persistOrder();
+  };
+
   // option group helpers
   const addGroup = () => setForm((f) => ({ ...f, option_groups: [...f.option_groups, { id: uid(), name: "", type: "single", required: false, min: 0, max: 1, options: [] }] }));
   const updGroup = (gid, patch) => setForm((f) => ({ ...f, option_groups: f.option_groups.map((g) => g.id === gid ? { ...g, ...patch } : g) }));
@@ -189,15 +205,15 @@ export default function Products() {
           <h1 className="font-display font-bold text-2xl dark:text-white">Produtos</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Arraste pela alca para definir a ordem no cardapio.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors">
+        <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex sm:items-center">
+          <label className="min-h-11 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors">
             <Upload className="w-4 h-4" /> Importar Excel
             <input type="file" accept=".xlsx" className="hidden" onChange={importExcel} />
           </label>
-          <Button variant="outline" onClick={exportExcel} className="border-gray-200 text-gray-800 dark:border-gray-700 dark:text-gray-100">
+          <Button variant="outline" onClick={exportExcel} className="min-h-11 border-gray-200 text-gray-800 dark:border-gray-700 dark:text-gray-100">
             <Download className="w-4 h-4 mr-1.5" /> Exportar Excel
           </Button>
-          <Button onClick={openNew} data-testid="new-product-btn" className="bg-indigo-600 hover:bg-indigo-700 rounded-xl text-white"><Plus className="w-4 h-4 mr-1" /> Novo produto</Button>
+          <Button onClick={openNew} data-testid="new-product-btn" className="col-span-2 min-h-11 bg-indigo-600 hover:bg-indigo-700 rounded-xl text-white sm:col-span-1"><Plus className="w-4 h-4 mr-1" /> Novo produto</Button>
         </div>
       </div>
 
@@ -282,7 +298,7 @@ export default function Products() {
               onDragOver={(event) => onDragOverProduct(event, p.id)}
               onDrop={(event) => { event.preventDefault(); if (canReorder && dragId) persistOrder(); }}
               onDragEnd={() => setDragId(null)}
-              className={`bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-700 p-3 flex gap-3 items-center transition-colors ${dragId === p.id ? "bg-emerald-50 dark:bg-emerald-950/20" : ""}`}
+              className={`bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-700 p-3 grid grid-cols-[auto_4rem_minmax(0,1fr)] sm:flex gap-3 items-center transition-colors ${dragId === p.id ? "bg-emerald-50 dark:bg-emerald-950/20" : ""}`}
               data-testid={`product-row-${p.id}`}>
               <button type="button" disabled={!canReorder}
                 title={canReorder ? "Arrastar produto" : "Limpe a busca e o filtro de status para ordenar"}
@@ -300,7 +316,11 @@ export default function Products() {
                   {p.is_featured && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 rounded">Destaque</span>}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="col-span-3 sm:col-span-1 flex items-center justify-end gap-2 border-t border-gray-100 dark:border-gray-800 pt-2 sm:border-0 sm:pt-0">
+                <div className="flex sm:hidden">
+                  <Button size="icon" variant="ghost" onClick={() => moveProduct(p.id, -1)} disabled={!canReorder || filteredItems[0]?.id === p.id} aria-label="Subir produto"><ChevronUp className="w-4 h-4" /></Button>
+                  <Button size="icon" variant="ghost" onClick={() => moveProduct(p.id, 1)} disabled={!canReorder || filteredItems[filteredItems.length - 1]?.id === p.id} aria-label="Descer produto"><ChevronDown className="w-4 h-4" /></Button>
+                </div>
                 <Switch checked={p.is_available} onCheckedChange={() => toggleAvailable(p)} data-testid={`toggle-available-${p.id}`} />
                 <Button size="icon" variant="ghost" onClick={() => openEdit(p)} data-testid={`edit-product-${p.id}`} className="text-gray-700 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800"><Pencil className="w-4 h-4" /></Button>
                 <Button size="icon" variant="ghost" onClick={() => remove(p.id)} className="text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"><Trash2 className="w-4 h-4" /></Button>
@@ -317,7 +337,7 @@ export default function Products() {
             <ImageUpload value={form.image_url} onChange={(url) => setForm({ ...form, image_url: url })} label="Foto do produto" />
             <div><Label>Nome</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="product-name" className="mt-1" /></div>
             <div><Label>Descrição</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} className="mt-1 resize-none" /></div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><Label>Preço</Label><Input type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} data-testid="product-price" className="mt-1" /></div>
               <div><Label>Preço promocional</Label><Input type="number" step="0.01" value={form.promotional_price || ""} onChange={(e) => setForm({ ...form, promotional_price: e.target.value })} className="mt-1" /></div>
             </div>

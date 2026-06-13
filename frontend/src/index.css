@@ -5,9 +5,74 @@
 
 body {
   margin: 0;
+  min-width: 0;
+  overflow-x: hidden;
   font-family: "Manrope", -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  max-width: 100%;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+}
+
+button, input, select, textarea {
+  font: inherit;
+}
+
+@media (max-width: 640px) {
+  .admin-content {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  }
+
+  .admin-content > div,
+  .admin-content > div > div,
+  .admin-content form,
+  .admin-content section {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .admin-content input,
+  .admin-content textarea,
+  .admin-content button,
+  .admin-content [role="combobox"] {
+    max-width: 100%;
+  }
+
+  .admin-content input,
+  .admin-content textarea,
+  .admin-content [role="combobox"] {
+    font-size: 16px;
+  }
+
+  .admin-content .overflow-x-auto {
+    width: 100%;
+    max-width: calc(100vw - 1.5rem);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .admin-content > div > .flex.items-center.justify-between {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .admin-shell .fixed.inset-0 > [class*="max-w-"] {
+    max-height: calc(100dvh - 1rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+@media (max-width: 430px) {
+  .admin-content .grid-cols-2,
+  .admin-content .grid-cols-3,
+  .admin-content .grid-cols-4,
+  .admin-content .grid-cols-5 {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
 }
 
 @layer base {

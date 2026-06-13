@@ -84,7 +84,7 @@ export default function SuperLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="admin-dark min-h-screen bg-[#0A0A0A] font-admin text-gray-100 flex">
+    <div className="admin-shell admin-dark min-h-[100dvh] bg-[#0A0A0A] font-admin text-gray-100 flex overflow-hidden">
       {/* Sidebar */}
       <aside
         className={`w-60 bg-[#111111] border-r border-white/5 flex flex-col fixed lg:static inset-y-0 z-40 transition-transform duration-200 ${
@@ -137,14 +137,14 @@ export default function SuperLayout() {
       {/* Main */}
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Mobile topbar */}
-        <div className="lg:hidden h-14 bg-[#111111] border-b border-white/5 flex items-center px-4 gap-3">
-          <button onClick={() => setMobileOpen(true)} className="text-gray-400">
+        <div className="lg:hidden h-14 min-h-14 bg-[#111111] border-b border-white/5 flex items-center px-4 gap-3">
+          <button onClick={() => setMobileOpen(true)} className="min-h-11 min-w-11 -ml-2 grid place-items-center text-gray-400">
             <Menu className="w-5 h-5" />
           </button>
           <span className="font-bold text-sm text-white">Super Admin</span>
         </div>
-        <main className="flex-1 overflow-y-auto p-6">
-          <Outlet />
+        <main className="admin-content flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-3 sm:p-4 lg:p-6">
+          <div className="w-full min-w-0 max-w-full"><Outlet /></div>
         </main>
       </div>
     </div>
