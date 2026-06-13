@@ -30,6 +30,12 @@ function hexRgba(hex, alpha = 0.18) {
 
 const DAY_LABELS = {mon:"Segunda",tue:"Terça",wed:"Quarta",thu:"Quinta",fri:"Sexta",sat:"Sábado",sun:"Domingo"};
 
+const IMAGE_FALLBACK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 450'%3E%3Crect width='800' height='450' fill='%23141414'/%3E%3Cpath d='M365 190h70v70h-70z' fill='none' stroke='%23333333' stroke-width='8'/%3E%3Cpath d='m375 245 18-20 16 14 15-18 18 24' fill='none' stroke='%23333333' stroke-width='8'/%3E%3C/svg%3E";
+const imageFallback = (event) => {
+  event.currentTarget.onerror = null;
+  event.currentTarget.src = IMAGE_FALLBACK;
+};
+
 /* ── Sub-components ── */
 const LOCATION_CACHE_KEY = "dino-menu-customer-region";
 const LOCATION_CACHE_TTL = 24 * 60 * 60 * 1000;
@@ -215,7 +221,7 @@ function MenuContent({ data, slug }) {
       {/* Cover */}
       <div className="relative w-full h-56 overflow-hidden">
         <img src={restaurant.cover_url || "https://images.pexels.com/photos/31124637/pexels-photo-31124637.jpeg"}
-          alt="capa" loading="eager" decoding="async" fetchPriority="high" className="w-full h-full object-cover"/>
+          onError={imageFallback} alt="capa" loading="eager" decoding="async" fetchPriority="high" className="w-full h-full object-cover"/>
         <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-black/30 to-transparent"/>
         <RegionalPromo accent={accent} buttonTextColor={buttonTextColor} />
         <button onClick={share} className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/60 backdrop-blur grid place-items-center border border-white/20">
@@ -228,7 +234,7 @@ function MenuContent({ data, slug }) {
         <div className="bg-[#111] border border-white/10 rounded-2xl p-4 flex gap-4 shadow-2xl">
           <div className="w-24 h-24 rounded-2xl overflow-hidden bg-[#1A1A1A] shrink-0 border border-white/10 grid place-items-center">
             {restaurant.logo_url
-              ? <img src={restaurant.logo_url} alt="logo" loading="eager" decoding="async" className="w-full h-full object-cover"/>
+              ? <img src={restaurant.logo_url} onError={imageFallback} alt="logo" loading="eager" decoding="async" className="w-full h-full object-cover"/>
               : <Store className="w-10 h-10 text-gray-600"/>}
           </div>
           <div className="flex-1 min-w-0 pt-1">
@@ -289,6 +295,7 @@ function MenuContent({ data, slug }) {
                     className={`relative shrink-0 w-[85%] aspect-[2.25/1] rounded-xl overflow-hidden snap-start bg-black ${linked ? "cursor-pointer" : ""}`}>
                     {b.image_url
                       ? <img src={b.image_url} alt={b.title || ""}
+                          onError={imageFallback}
                           loading="lazy" decoding="async"
                           style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"cover",objectPosition:"center"}}/>
                       : <div style={{position:"absolute",inset:0,background:"#1A1A1A"}}/>}
@@ -315,7 +322,7 @@ function MenuContent({ data, slug }) {
                 {combos.map(combo => (
                   <div key={combo.id} className="snap-start min-w-[200px] bg-[#111] border border-white/10 rounded-2xl overflow-hidden">
                     {combo.image_url
-                      ? <img src={combo.image_url} alt={combo.name} loading="lazy" decoding="async" className="w-full h-28 object-cover"/>
+                      ? <img src={combo.image_url} onError={imageFallback} alt={combo.name} loading="lazy" decoding="async" className="w-full h-28 object-cover"/>
                       : <div className="w-full h-28 grid place-items-center bg-[#1A1A1A] text-3xl">🍱</div>}
                     <div className="p-3">
                       <p className="font-display font-bold text-sm" style={textStyle}>{combo.name}</p>
@@ -386,7 +393,7 @@ function MenuContent({ data, slug }) {
                         </div>
                         {p.image_url && (
                           <div className="relative w-24 h-24 shrink-0">
-                            <img src={p.image_url} alt={p.name} loading="lazy" decoding="async" className="w-24 h-24 rounded-xl object-cover"/>
+                            <img src={p.image_url} onError={imageFallback} alt={p.name} loading="lazy" decoding="async" className="w-24 h-24 rounded-xl object-cover"/>
                             {p.is_available && (
                               <span className="absolute -bottom-1.5 -right-1.5 w-7 h-7 grid place-items-center rounded-full shadow-lg" style={{background:accent}}>
                                 <Plus className="w-4 h-4" style={{color:buttonTextColor}}/>

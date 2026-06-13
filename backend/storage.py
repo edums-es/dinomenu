@@ -1,4 +1,5 @@
 """Storage: Cloudinary (production) com fallback local."""
+import base64
 import os
 import uuid
 import logging
@@ -127,11 +128,18 @@ async def upload(file: UploadFile = File(...), user: dict = Depends(get_current_
             return {"url": public_url}
         else:
             path = _upload_local(data, ext, owner)
+            file_id = str(uuid.uuid4())
+            blob_collection = f"file_blob_{file_id.replace('-', '')}"
+            await db[blob_collection].insert_one({
+                "id": file_id,
+                "data_base64": base64.b64encode(data).decode("ascii"),
+            })
             await db.files.insert_one({
-                "id": str(uuid.uuid4()),
+                "id": file_id,
                 "restaurant_id": user.get("restaurant_id"),
                 "storage_type": "local",
                 "storage_path": path,
+                "blob_collection": blob_collection,
                 "original_filename": file.filename,
                 "content_type": MIME_TYPES.get(ext, "image/jpeg"),
                 "size": len(data),
@@ -151,10 +159,17 @@ async def download(path: str):
     if not record:
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
     full_path = os.path.join(UPLOAD_DIR, path.replace("/", os.sep))
-    if not os.path.exists(full_path):
-        raise HTTPException(status_code=404, detail="Arquivo não encontrado no servidor")
-    with open(full_path, "rb") as f:
-        data = f.read()
+    if os.path.exists(full_path):
+        with open(full_path, "rb") as f:
+            data = f.read()
+    elif record.get("blob_collection"):
+        blob = await db[record["blob_collection"]].find_one({"id": record["id"]})
+        try:
+            data = base64.b64decode((blob or {})["data_base64"], validate=True)
+        except (KeyError, ValueError, TypeError):
+            raise HTTPException(status_code=500, detail="Arquivo persistido invalido")
+    else:
+        raise HTTPException(status_code=404, detail="Arquivo nao encontrado no servidor")
     ext = path.rsplit(".", 1)[-1].lower()
     content_type = MIME_TYPES.get(ext, "application/octet-stream")
     return Response(content=data, media_type=content_type,
