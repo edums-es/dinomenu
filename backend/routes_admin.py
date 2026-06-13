@@ -141,9 +141,37 @@ async def list_products(user=Depends(require_restaurant)):
 async def create_product(data: ProductIn, user=Depends(require_restaurant)):
     await validate_product_suggestions(data, rid(user))
     doc = data.model_dump()
+    if doc.get("sort_order", 0) <= 0:
+        products = await db.products.find(
+            {"restaurant_id": rid(user), "category_id": doc.get("category_id")},
+            {"sort_order": 1, "_id": 0},
+        ).to_list(1000)
+        doc["sort_order"] = max((p.get("sort_order", 0) for p in products), default=0) + 1
     doc.update({"id": new_id(), "restaurant_id": rid(user), "created_at": now_iso()})
     await db.products.insert_one(doc)
     return clean(doc)
+
+
+@router.put("/products/reorder")
+async def reorder_products(data: dict, user=Depends(require_restaurant)):
+    product_ids = data.get("product_ids")
+    if not isinstance(product_ids, list) or not product_ids:
+        raise HTTPException(status_code=400, detail="Informe a ordem dos produtos")
+
+    restaurant_id = rid(user)
+    existing = await db.products.find(
+        {"restaurant_id": restaurant_id, "id": {"$in": product_ids}},
+        {"id": 1, "_id": 0},
+    ).to_list(1000)
+    existing_ids = {product["id"] for product in existing}
+    ordered_ids = [pid for pid in product_ids if pid in existing_ids]
+
+    for index, pid in enumerate(ordered_ids, start=1):
+        await db.products.update_one(
+            {"id": pid, "restaurant_id": restaurant_id},
+            {"$set": {"sort_order": index, "updated_at": now_iso()}},
+        )
+    return {"ok": True, "updated": len(ordered_ids)}
 
 
 @router.put("/products/{pid}")
@@ -414,9 +442,36 @@ async def list_banners(user=Depends(require_restaurant)):
 @router.post("/banners")
 async def create_banner(data: BannerIn, user=Depends(require_restaurant)):
     doc = data.model_dump()
+    if doc.get("sort_order", 0) <= 0:
+        banners = await db.banners.find(
+            {"restaurant_id": rid(user)}, {"sort_order": 1, "_id": 0}
+        ).to_list(100)
+        doc["sort_order"] = max((b.get("sort_order", 0) for b in banners), default=0) + 1
     doc.update({"id": new_id(), "restaurant_id": rid(user), "created_at": now_iso()})
     await db.banners.insert_one(doc)
     return clean(doc)
+
+
+@router.put("/banners/reorder")
+async def reorder_banners(data: dict, user=Depends(require_restaurant)):
+    banner_ids = data.get("banner_ids")
+    if not isinstance(banner_ids, list) or not banner_ids:
+        raise HTTPException(status_code=400, detail="Informe a ordem dos banners")
+
+    restaurant_id = rid(user)
+    existing = await db.banners.find(
+        {"restaurant_id": restaurant_id, "id": {"$in": banner_ids}},
+        {"id": 1, "_id": 0},
+    ).to_list(100)
+    existing_ids = {banner["id"] for banner in existing}
+    ordered_ids = [bid for bid in banner_ids if bid in existing_ids]
+
+    for index, bid in enumerate(ordered_ids, start=1):
+        await db.banners.update_one(
+            {"id": bid, "restaurant_id": restaurant_id},
+            {"$set": {"sort_order": index, "updated_at": now_iso()}},
+        )
+    return {"ok": True, "updated": len(ordered_ids)}
 
 
 @router.put("/banners/{bid}")

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import ImageUpload from "@/components/admin/ImageUpload";
-import { Plus, Trash2, Image as ImageIcon } from "lucide-react";
+import { Plus, Trash2, Image as ImageIcon, GripVertical, Loader2 } from "lucide-react";
 
 const EMPTY = { image_url: null, title: "", subtitle: "", is_active: true, sort_order: 0 };
 
@@ -18,9 +18,13 @@ export default function Banners() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(EMPTY);
   const [editId, setEditId] = useState(null);
+  const [dragId, setDragId] = useState(null);
+  const [savingOrder, setSavingOrder] = useState(false);
+  const latestItemsRef = useRef([]);
 
   const load = () => api.get("/admin/banners").then((r) => setItems(r.data));
   useEffect(() => { load(); }, []);
+  useEffect(() => { latestItemsRef.current = items; }, [items]);
 
   const openNew = () => { setForm(EMPTY); setEditId(null); setOpen(true); };
   const openEdit = (b) => { setForm(b); setEditId(b.id); setOpen(true); };
@@ -37,12 +41,52 @@ export default function Banners() {
     await api.delete(`/admin/banners/${id}`); toast.success("Banner excluído"); load();
   };
 
+  const persistOrder = async () => {
+    setSavingOrder(true);
+    try {
+      await api.put("/admin/banners/reorder", { banner_ids: latestItemsRef.current.map((item) => item.id) });
+      toast.success("Ordem dos banners salva");
+      load();
+    } catch {
+      toast.error("Nao foi possivel salvar a ordem");
+      load();
+    } finally {
+      setSavingOrder(false);
+      setDragId(null);
+    }
+  };
+
+  const onDragOverBanner = (event, targetId) => {
+    event.preventDefault();
+    if (!dragId || dragId === targetId) return;
+    setItems((current) => {
+      const fromIndex = current.findIndex((item) => item.id === dragId);
+      const toIndex = current.findIndex((item) => item.id === targetId);
+      if (fromIndex < 0 || toIndex < 0) return current;
+      const next = [...current];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      const ordered = next.map((item, index) => ({ ...item, sort_order: index + 1 }));
+      latestItemsRef.current = ordered;
+      return ordered;
+    });
+  };
+
   return (
     <div className="space-y-5" data-testid="admin-banners">
       <div className="flex items-center justify-between">
-        <h1 className="font-display font-bold text-2xl">Banners</h1>
+        <div>
+          <h1 className="font-display font-bold text-2xl">Banners</h1>
+          <p className="text-sm text-gray-500 mt-1">Arraste os cards para definir a ordem no cardapio.</p>
+        </div>
         <Button onClick={openNew} data-testid="new-banner-btn" className="bg-[#111827] rounded-xl"><Plus className="w-4 h-4 mr-1" /> Novo</Button>
       </div>
+
+      {savingOrder && (
+        <div className="flex items-center gap-2 text-sm text-emerald-600">
+          <Loader2 className="w-4 h-4 animate-spin" /> Salvando nova ordem...
+        </div>
+      )}
 
       {items.length === 0 ? (
         <div className="bg-white rounded-2xl border p-12 text-center text-gray-400">
@@ -51,10 +95,22 @@ export default function Banners() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {items.map((b) => (
-            <div key={b.id} className="bg-white rounded-2xl border border-gray-100 overflow-hidden" data-testid={`banner-row-${b.id}`}>
+            <div key={b.id}
+              draggable
+              onDragStart={() => setDragId(b.id)}
+              onDragOver={(event) => onDragOverBanner(event, b.id)}
+              onDrop={(event) => { event.preventDefault(); persistOrder(); }}
+              onDragEnd={() => setDragId(null)}
+              className={`bg-white rounded-2xl border border-gray-100 overflow-hidden transition-colors ${dragId === b.id ? "ring-2 ring-emerald-500" : ""}`}
+              data-testid={`banner-row-${b.id}`}>
               {b.image_url && <img src={b.image_url} alt={b.title} className="w-full h-32 object-cover" />}
               <div className="p-4 flex justify-between items-center">
-                <div><p className="font-medium">{b.title}</p><p className="text-xs text-gray-400">{b.subtitle} · {b.is_active ? "Ativo" : "Inativo"}</p></div>
+                <div className="flex items-center gap-2 min-w-0">
+                  <button type="button" aria-label="Arrastar banner" className="h-9 w-8 shrink-0 grid place-items-center text-gray-400 cursor-grab active:cursor-grabbing">
+                    <GripVertical className="w-5 h-5" />
+                  </button>
+                  <div className="min-w-0"><p className="font-medium truncate">{b.title}</p><p className="text-xs text-gray-400 truncate">{b.subtitle} · Posicao {b.sort_order} · {b.is_active ? "Ativo" : "Inativo"}</p></div>
+                </div>
                 <div className="flex gap-1">
                   <Button size="sm" variant="outline" onClick={() => openEdit(b)}>Editar</Button>
                   <Button size="icon" variant="ghost" onClick={() => remove(b.id)} className="text-red-500"><Trash2 className="w-4 h-4" /></Button>

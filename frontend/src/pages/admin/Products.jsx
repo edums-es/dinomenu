@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api, { formatApiError } from "@/lib/api";
 import { toast } from "sonner";
 import { brl } from "@/lib/format";
@@ -14,7 +14,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import ImageUpload from "@/components/admin/ImageUpload";
-import { Plus, Pencil, Trash2, UtensilsCrossed, X, Download, Upload, Search, SlidersHorizontal } from "lucide-react";
+import { Plus, Pencil, Trash2, UtensilsCrossed, X, Download, Upload, Search, SlidersHorizontal, GripVertical, Loader2 } from "lucide-react";
 
 const EMPTY = {
   name: "", description: "", image_url: null, price: 0, promotional_price: null,
@@ -34,6 +34,9 @@ export default function Products() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [availabilityFilter, setAvailabilityFilter] = useState("all");
+  const [dragId, setDragId] = useState(null);
+  const [savingOrder, setSavingOrder] = useState(false);
+  const latestVisibleRef = useRef([]);
 
   const load = () => {
     api.get("/admin/products").then((r) => setItems(Array.isArray(r.data) ? r.data : [])).catch(() => setItems([]));
@@ -54,6 +57,8 @@ export default function Products() {
       return matchesSearch && matchesCategory && matchesAvailability;
     });
   }, [items, search, categoryFilter, availabilityFilter]);
+  useEffect(() => { latestVisibleRef.current = filteredItems; }, [filteredItems]);
+  const canReorder = !search.trim() && availabilityFilter === "all";
 
   const clearFilters = () => {
     setSearch("");
@@ -112,6 +117,39 @@ export default function Products() {
     load();
   };
 
+  const persistOrder = async () => {
+    setSavingOrder(true);
+    try {
+      await api.put("/admin/products/reorder", { product_ids: latestVisibleRef.current.map((item) => item.id) });
+      toast.success("Ordem dos produtos salva");
+      load();
+    } catch {
+      toast.error("Nao foi possivel salvar a ordem");
+      load();
+    } finally {
+      setSavingOrder(false);
+      setDragId(null);
+    }
+  };
+
+  const onDragOverProduct = (event, targetId) => {
+    event.preventDefault();
+    if (!canReorder || !dragId || dragId === targetId) return;
+    setItems((current) => {
+      const fromIndex = current.findIndex((item) => item.id === dragId);
+      const toIndex = current.findIndex((item) => item.id === targetId);
+      if (fromIndex < 0 || toIndex < 0) return current;
+      const next = [...current];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      latestVisibleRef.current = next.filter((item) => (
+        categoryFilter === "all"
+        || (categoryFilter === "uncategorized" ? !item.category_id : item.category_id === categoryFilter)
+      ));
+      return next;
+    });
+  };
+
   // option group helpers
   const addGroup = () => setForm((f) => ({ ...f, option_groups: [...f.option_groups, { id: uid(), name: "", type: "single", required: false, min: 0, max: 1, options: [] }] }));
   const updGroup = (gid, patch) => setForm((f) => ({ ...f, option_groups: f.option_groups.map((g) => g.id === gid ? { ...g, ...patch } : g) }));
@@ -147,7 +185,10 @@ export default function Products() {
   return (
     <div className="space-y-5" data-testid="admin-products">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display font-bold text-2xl dark:text-white">Produtos</h1>
+        <div>
+          <h1 className="font-display font-bold text-2xl dark:text-white">Produtos</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Arraste pela alca para definir a ordem no cardapio.</p>
+        </div>
         <div className="flex items-center gap-2">
           <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors">
             <Upload className="w-4 h-4" /> Importar Excel
@@ -159,6 +200,12 @@ export default function Products() {
           <Button onClick={openNew} data-testid="new-product-btn" className="bg-indigo-600 hover:bg-indigo-700 rounded-xl text-white"><Plus className="w-4 h-4 mr-1" /> Novo produto</Button>
         </div>
       </div>
+
+      {savingOrder && (
+        <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
+          <Loader2 className="w-4 h-4 animate-spin" /> Salvando nova ordem...
+        </div>
+      )}
 
       <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-700 p-4 space-y-3">
         <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
@@ -229,7 +276,19 @@ export default function Products() {
       ) : (
         <div className="grid gap-3">
           {filteredItems.map((p) => (
-            <div key={p.id} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-700 p-3 flex gap-3 items-center" data-testid={`product-row-${p.id}`}>
+            <div key={p.id}
+              draggable={canReorder}
+              onDragStart={() => canReorder && setDragId(p.id)}
+              onDragOver={(event) => onDragOverProduct(event, p.id)}
+              onDrop={(event) => { event.preventDefault(); if (canReorder && dragId) persistOrder(); }}
+              onDragEnd={() => setDragId(null)}
+              className={`bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-700 p-3 flex gap-3 items-center transition-colors ${dragId === p.id ? "bg-emerald-50 dark:bg-emerald-950/20" : ""}`}
+              data-testid={`product-row-${p.id}`}>
+              <button type="button" disabled={!canReorder}
+                title={canReorder ? "Arrastar produto" : "Limpe a busca e o filtro de status para ordenar"}
+                className="h-10 w-8 shrink-0 grid place-items-center text-gray-400 cursor-grab active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-30">
+                <GripVertical className="w-5 h-5" />
+              </button>
               <div className="w-16 h-16 rounded-xl bg-gray-100 overflow-hidden shrink-0">
                 {p.image_url && <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />}
               </div>
