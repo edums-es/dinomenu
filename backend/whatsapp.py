@@ -253,7 +253,7 @@ def _chatbot(text, restaurant):
     if re.search(r"\b(cardapio|menu|produto|lanche|comida)\b", q):
         slug = restaurant.get("slug", "")
         url = _normalize_public_url(os.environ.get("PUBLIC_URL"))
-        return f"Cardapio: {url}/loja/{slug}"
+        return f"Cardapio: {url}/cardapio/{slug}"
     if re.search(r"\b(obrigad|valeu|brigad)\b", q):
         return "Por nada! Bom apetite!"
     return "Tente: endereco | horario | entrega | pagamento | cardapio"

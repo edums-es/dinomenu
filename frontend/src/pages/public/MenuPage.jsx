@@ -43,6 +43,7 @@ const LOCATION_CACHE_TTL = 24 * 60 * 60 * 1000;
 function RegionalPromo({ accent, buttonTextColor }) {
   const [location, setLocation] = useState(null);
   const [status, setStatus] = useState("loading");
+  const [expanded, setExpanded] = useState(true);
 
   const saveLocation = (nextLocation) => {
     if (!nextLocation?.region) return false;
@@ -95,6 +96,12 @@ function RegionalPromo({ accent, buttonTextColor }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (status !== "ready" || !expanded) return undefined;
+    const timer = window.setTimeout(() => setExpanded(false), 4500);
+    return () => window.clearTimeout(timer);
+  }, [status, expanded]);
+
   const label = location?.neighborhood
     ? `${location.neighborhood}, ${location.city || location.state || ""}`.replace(/, $/, "")
     : location?.region;
@@ -102,8 +109,12 @@ function RegionalPromo({ accent, buttonTextColor }) {
   return (
     <button
       type="button"
-      onClick={status === "ready" ? undefined : requestLocation}
-      className="absolute left-4 top-4 z-10 max-w-[calc(100%-5rem)] rounded-full border px-3 py-2 text-left shadow-lg backdrop-blur-md transition-colors"
+      onClick={() => {
+        if (status === "ready") setExpanded(true);
+        else requestLocation();
+      }}
+      aria-label={expanded ? "Ofertas exclusivas da regiao" : "Mostrar ofertas da regiao"}
+      className={`absolute left-4 top-4 z-10 rounded-full border text-left shadow-lg backdrop-blur-md transition-all duration-300 ${expanded ? "max-w-[calc(100%-5rem)] px-3 py-2" : "h-10 w-10 p-0 grid place-items-center"}`}
       style={{
         background: status === "ready" ? hexRgba(accent, 0.88) : "rgba(0,0,0,.68)",
         borderColor: status === "ready" ? accent : "rgba(255,255,255,.22)",
@@ -116,9 +127,11 @@ function RegionalPromo({ accent, buttonTextColor }) {
         {status === "loading"
           ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
           : <MapPin className="h-3.5 w-3.5 shrink-0" />}
-        <span className="truncate text-[11px] font-bold">
-          {status === "ready" ? `Ofertas Exclusivas em ${label}` : status === "loading" ? "Identificando sua regiao..." : "Usar minha localizacao"}
-        </span>
+        {expanded && (
+          <span className="truncate text-[11px] font-bold">
+            {status === "ready" ? `Ofertas Exclusivas em ${label}` : status === "loading" ? "Identificando sua regiao..." : "Usar minha localizacao"}
+          </span>
+        )}
       </span>
     </button>
   );
@@ -205,7 +218,7 @@ function MenuContent({ data, slug }) {
   const scrollToCat = (cid) => { setActiveCat(cid); sectionRefs.current[cid]?.scrollIntoView({ behavior:"smooth", block:"start" }); };
 
   const share = async () => {
-    const url = `${API}/public/restaurants/${slug}/share`;
+    const url = `${window.location.origin}/cardapio/${slug}`;
     if (navigator.share) { try { await navigator.share({ title: restaurant.name, url }); } catch {} }
     else { navigator.clipboard.writeText(url); toast.success("Link copiado!"); }
   };

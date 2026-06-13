@@ -425,7 +425,7 @@ async def table_qr_data(table_id: str, user=Depends(require_restaurant)):
     slug = restaurant.get("slug", "") if restaurant else ""
     import os
     frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
-    url = f"{frontend_url}/loja/{slug}?mesa={table['number']}"
+    url = f"{frontend_url}/cardapio/{slug}?mesa={table['number']}"
     return {
         "url": url,
         "table_number": table["number"],

@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/loja/:slug",
+      "destination": "https://api.easygrowth.com.br/api/public/restaurants/:slug/page"
+    },
+    {
+      "source": "/cardapio/:slug",
+      "destination": "https://api.easygrowth.com.br/api/public/restaurants/:slug/share"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

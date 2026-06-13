@@ -9,6 +9,7 @@ import hashlib
 import hmac
 import ipaddress
 from datetime import datetime, timezone
+from urllib.parse import urlencode
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -216,20 +217,69 @@ def _frontend_base_url(request: Request) -> str:
     return f"{proto}://{host}".rstrip("/")
 
 
+@router.get("/restaurants/{slug}/page", response_class=HTMLResponse)
+async def restaurant_menu_page(slug: str, request: Request):
+    """Return the SPA shell with restaurant metadata for link-preview crawlers."""
+    r = await _get_restaurant_or_404(slug)
+    frontend_base = _frontend_base_url(request)
+    name = html.escape(r.get("name") or "Cardapio", quote=True)
+    description = html.escape(
+        r.get("tagline")
+        or r.get("description")
+        or "Acesse o cardapio digital e faca seu pedido online.",
+        quote=True,
+    )
+    image = html.escape(
+        _absolute_url(r.get("logo_url") or r.get("cover_url") or f"{frontend_base}/dinomenu-share.svg", request),
+        quote=True,
+    )
+    canonical = html.escape(f"{frontend_base}/loja/{slug}", quote=True)
+    preview_meta = f"""
+    <title>{name}</title>
+    <meta name="description" content="{description}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="{name}" />
+    <meta property="og:description" content="{description}" />
+    <meta property="og:image" content="{image}" />
+    <meta property="og:image:secure_url" content="{image}" />
+    <meta property="og:url" content="{canonical}" />
+    <meta property="og:site_name" content="{name}" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="{name}" />
+    <meta name="twitter:description" content="{description}" />
+    <meta name="twitter:image" content="{image}" />
+    <link rel="canonical" href="{canonical}" />
+    """
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            response = await client.get(f"{frontend_base}/")
+            response.raise_for_status()
+        page = response.text.replace("<head>", f"<head>{preview_meta}", 1)
+    except httpx.HTTPError as exc:
+        logger.error("Falha ao carregar shell do cardapio: %s", exc)
+        raise HTTPException(status_code=502, detail="Cardapio temporariamente indisponivel")
+    return HTMLResponse(page, headers={"Cache-Control": "public, max-age=60"})
+
+
 @router.get("/restaurants/{slug}/share", response_class=HTMLResponse)
 async def restaurant_share_preview(slug: str, request: Request):
     r = await _get_restaurant_or_404(slug)
     brand = public_white_label_config(await db.platform_settings.find_one({"_id": "global"}, {"_id": 0}) or {})
     name = html.escape(r.get("name") or brand.get("name") or "Dino Menu")
-    site_name = html.escape(brand.get("name") or "Dino Menu")
+    site_name = name
     description = html.escape(
         r.get("tagline")
         or r.get("description")
         or "Acesse o cardapio digital e faca seu pedido online."
     )
     frontend_base = _frontend_base_url(request)
-    image = _absolute_url(r.get("cover_url") or r.get("logo_url") or brand.get("logo_url") or f"{frontend_base}/dinomenu-share.svg", request)
+    image = _absolute_url(r.get("logo_url") or r.get("cover_url") or brand.get("logo_url") or f"{frontend_base}/dinomenu-share.svg", request)
+    query = {}
+    if request.query_params.get("mesa"):
+        query["mesa"] = request.query_params["mesa"]
     url = f"{frontend_base}/loja/{html.escape(slug)}"
+    if query:
+        url += "?" + urlencode(query)
     safe_url = html.escape(url, quote=True)
     redirect_url = json.dumps(url)
 
@@ -245,11 +295,11 @@ async def restaurant_share_preview(slug: str, request: Request):
     <meta property="og:description" content="{description}" />
     <meta property="og:image" content="{html.escape(image)}" />
     <meta property="og:image:secure_url" content="{html.escape(image)}" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="600" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
     <meta property="og:url" content="{safe_url}" />
     <meta property="og:site_name" content="{site_name}" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="{name}" />
     <meta name="twitter:description" content="{description}" />
     <meta name="twitter:image" content="{html.escape(image)}" />

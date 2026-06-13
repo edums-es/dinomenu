@@ -260,7 +260,7 @@ export default function Settings() {
             <Label className="dark:text-gray-200">Slug público</Label>
             <Input value={r.slug || ""} disabled
               className="mt-1 bg-gray-50 dark:bg-gray-800/50 dark:border-gray-700 dark:text-gray-400" />
-            <p className="text-xs text-gray-400 mt-1">/loja/{r.slug}</p>
+            <p className="text-xs text-gray-400 mt-1">/cardapio/{r.slug}</p>
           </div>
         </TabsContent>
 

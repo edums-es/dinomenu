@@ -194,7 +194,7 @@ async def flemy_tools(
         ).sort("sort_order", 1).to_list(100)
         return {
             "ok": True,
-            "menu_url": body.get("menu_url") or f"{public_frontend_url()}/loja/{restaurant.get('slug', '')}",
+            "menu_url": body.get("menu_url") or f"{public_frontend_url()}/cardapio/{restaurant.get('slug', '')}",
             "products": [
                 {"id": p.get("id"), "name": p.get("name"), "description": p.get("description"), "price": p.get("promotional_price") or p.get("price")}
                 for p in products
