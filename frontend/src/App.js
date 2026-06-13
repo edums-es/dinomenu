@@ -56,6 +56,7 @@ function App() {
             <Routes>
             <Route path="/themazuki/master" element={<ForceLightMode><LoginPage /></ForceLightMode>} />
             <Route path="/loja/:slug" element={<ForceLightMode><MenuPage /></ForceLightMode>} />
+            <Route path="/cardapio/:slug" element={<ForceLightMode><MenuPage /></ForceLightMode>} />
             <Route path="/pedido/:order_id" element={<ForceLightMode><TrackOrder /></ForceLightMode>} />
             <Route path="/meus-pedidos" element={<ForceLightMode><MyOrders /></ForceLightMode>} />
             <Route path="/meus-pedidos/:slug" element={<ForceLightMode><MyOrders /></ForceLightMode>} />

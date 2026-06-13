@@ -217,10 +217,50 @@ function MenuContent({ data, slug }) {
 
   const scrollToCat = (cid) => { setActiveCat(cid); sectionRefs.current[cid]?.scrollIntoView({ behavior:"smooth", block:"start" }); };
 
+  const copyShareLink = async (url) => {
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      const input = document.createElement("textarea");
+      input.value = url;
+      input.setAttribute("readonly", "");
+      input.style.position = "fixed";
+      input.style.opacity = "0";
+      document.body.appendChild(input);
+      input.select();
+      const copied = document.execCommand("copy");
+      document.body.removeChild(input);
+      if (!copied) throw new Error("Nao foi possivel copiar o link");
+    }
+    toast.success("Link do cardapio copiado!");
+  };
+
   const share = async () => {
-    const url = `${window.location.origin}/cardapio/${slug}`;
-    if (navigator.share) { try { await navigator.share({ title: restaurant.name, url }); } catch {} }
-    else { navigator.clipboard.writeText(url); toast.success("Link copiado!"); }
+    const shareUrl = new URL(`/cardapio/${slug}`, window.location.origin);
+    const table = new URL(window.location.href).searchParams.get("mesa");
+    if (table) shareUrl.searchParams.set("mesa", table);
+    shareUrl.searchParams.set("v", Math.floor(Date.now() / 60000).toString());
+    const url = shareUrl.toString();
+    const shareData = {
+      title: restaurant.name,
+      text: `Confira o cardapio de ${restaurant.name}`,
+      url,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (error) {
+        if (error?.name === "AbortError") return;
+      }
+    }
+
+    try {
+      await copyShareLink(url);
+    } catch {
+      toast.error("Nao foi possivel compartilhar. Tente novamente.");
+    }
   };
 
   const TABS = [
@@ -237,7 +277,7 @@ function MenuContent({ data, slug }) {
           onError={imageFallback} alt="capa" loading="eager" decoding="async" fetchPriority="high" className="w-full h-full object-cover"/>
         <div className="absolute inset-0 bg-gradient-to-t from-[#0A0A0A] via-black/30 to-transparent"/>
         <RegionalPromo accent={accent} buttonTextColor={buttonTextColor} />
-        <button onClick={share} className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/60 backdrop-blur grid place-items-center border border-white/20">
+        <button type="button" onClick={share} aria-label={`Compartilhar cardapio de ${restaurant.name}`} className="absolute top-4 right-4 z-20 w-11 h-11 rounded-full bg-black/60 backdrop-blur grid place-items-center border border-white/20">
           <Share2 className="w-4 h-4 text-white"/>
         </button>
       </div>

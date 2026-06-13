@@ -6,7 +6,7 @@
     },
     {
       "source": "/cardapio/:slug",
-      "destination": "https://api.easygrowth.com.br/api/public/restaurants/:slug/share"
+      "destination": "https://api.easygrowth.com.br/api/public/restaurants/:slug/page"
     },
     {
       "source": "/(.*)",

@@ -3,6 +3,7 @@ import logging
 import html
 import os
 import json
+import re
 import asyncio
 import base64
 import hashlib
@@ -217,9 +218,37 @@ def _frontend_base_url(request: Request) -> str:
     return f"{proto}://{host}".rstrip("/")
 
 
+def _inject_preview_metadata(page: str, preview_meta: str) -> str:
+    """Replace generic SPA metadata so crawlers only see the restaurant."""
+    page = re.sub(r"<title\b[^>]*>.*?</title>", "", page, flags=re.IGNORECASE | re.DOTALL)
+    page = re.sub(
+        r'<meta\b[^>]*(?:name|property)=["\'](?:description|og:[^"\']+|twitter:[^"\']+)["\'][^>]*>',
+        "",
+        page,
+        flags=re.IGNORECASE,
+    )
+    page = re.sub(
+        r'<link\b[^>]*rel=["\']canonical["\'][^>]*>',
+        "",
+        page,
+        flags=re.IGNORECASE,
+    )
+    return page.replace("<head>", f"<head>{preview_meta}", 1)
+
+
+def _public_menu_url(frontend_base: str, slug: str, request: Request) -> str:
+    query = {
+        key: request.query_params[key]
+        for key in ("mesa", "v")
+        if request.query_params.get(key)
+    }
+    url = f"{frontend_base}/cardapio/{slug}"
+    return f"{url}?{urlencode(query)}" if query else url
+
+
 @router.get("/restaurants/{slug}/page", response_class=HTMLResponse)
 async def restaurant_menu_page(slug: str, request: Request):
-    """Return the SPA shell with restaurant metadata for link-preview crawlers."""
+    """Return the SPA shell with metadata belonging only to the restaurant."""
     r = await _get_restaurant_or_404(slug)
     frontend_base = _frontend_base_url(request)
     name = html.escape(r.get("name") or "Cardapio", quote=True)
@@ -233,7 +262,7 @@ async def restaurant_menu_page(slug: str, request: Request):
         _absolute_url(r.get("logo_url") or r.get("cover_url") or f"{frontend_base}/dinomenu-share.svg", request),
         quote=True,
     )
-    canonical = html.escape(f"{frontend_base}/loja/{slug}", quote=True)
+    canonical = html.escape(_public_menu_url(frontend_base, slug, request), quote=True)
     preview_meta = f"""
     <title>{name}</title>
     <meta name="description" content="{description}" />
@@ -254,11 +283,11 @@ async def restaurant_menu_page(slug: str, request: Request):
         async with httpx.AsyncClient(timeout=8) as client:
             response = await client.get(f"{frontend_base}/")
             response.raise_for_status()
-        page = response.text.replace("<head>", f"<head>{preview_meta}", 1)
+        page = _inject_preview_metadata(response.text, preview_meta)
     except httpx.HTTPError as exc:
         logger.error("Falha ao carregar shell do cardapio: %s", exc)
         raise HTTPException(status_code=502, detail="Cardapio temporariamente indisponivel")
-    return HTMLResponse(page, headers={"Cache-Control": "public, max-age=60"})
+    return HTMLResponse(page, headers={"Cache-Control": "public, max-age=60, stale-while-revalidate=300"})
 
 
 @router.get("/restaurants/{slug}/share", response_class=HTMLResponse)
@@ -274,12 +303,7 @@ async def restaurant_share_preview(slug: str, request: Request):
     )
     frontend_base = _frontend_base_url(request)
     image = _absolute_url(r.get("logo_url") or r.get("cover_url") or brand.get("logo_url") or f"{frontend_base}/dinomenu-share.svg", request)
-    query = {}
-    if request.query_params.get("mesa"):
-        query["mesa"] = request.query_params["mesa"]
-    url = f"{frontend_base}/loja/{html.escape(slug)}"
-    if query:
-        url += "?" + urlencode(query)
+    url = _public_menu_url(frontend_base, slug, request)
     safe_url = html.escape(url, quote=True)
     redirect_url = json.dumps(url)
 
