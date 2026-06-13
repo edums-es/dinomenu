@@ -17,8 +17,8 @@ export default function ImageUpload({ value, onChange, label, className = "", as
       const { data } = await api.post("/upload", fd);
       onChange(fileUrl(data.url));
       toast.success("Imagem enviada");
-    } catch {
-      toast.error("Falha no upload");
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || "Falha no upload");
     } finally {
       setUploading(false);
     }

@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 # ── Cloudinary config ──────────────────────────────────────────────────────
 CLOUDINARY_URL = os.environ.get("CLOUDINARY_URL", "")
 USE_CLOUDINARY = bool(CLOUDINARY_URL)
+IS_RAILWAY = bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_PROJECT_ID"))
 
 if USE_CLOUDINARY:
     cloudinary.config(cloudinary_url=CLOUDINARY_URL)
@@ -100,6 +101,11 @@ router = APIRouter(prefix="/api", tags=["files"])
 
 @router.post("/upload")
 async def upload(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    if IS_RAILWAY and not USE_CLOUDINARY:
+        raise HTTPException(
+            status_code=503,
+            detail="Cloudinary nao configurado no backend. Defina CLOUDINARY_URL no servico Railway da API.",
+        )
     ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "bin"
     if ext not in MIME_TYPES:
         raise HTTPException(status_code=400, detail="Formato nao suportado (use jpg, png ou webp)")
