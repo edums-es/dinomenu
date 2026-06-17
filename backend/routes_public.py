@@ -23,6 +23,7 @@ from models import OrderIn, clean, is_restaurant_open, new_id, now_iso
 from order_security import (
     calculate_order,
     log_client_total_mismatch,
+    merge_option_groups,
     money,
     next_sequence,
     release_stock,
@@ -369,13 +370,16 @@ async def get_restaurant_identity(slug: str):
 async def get_menu(slug: str, response: Response):
     response.headers["Cache-Control"] = "public, max-age=15, stale-while-revalidate=60"
     r = await _get_restaurant_or_404(slug)
-    categories, products, banners, combos, reviews = await asyncio.gather(
+    categories, products, addon_groups, banners, combos, reviews = await asyncio.gather(
         db.categories.find(
             {"restaurant_id": r["id"], "is_active": True}, {"_id": 0}
         ).sort("sort_order", 1).to_list(200),
         db.products.find(
             {"restaurant_id": r["id"]}, {"_id": 0}
         ).sort("sort_order", 1).to_list(1000),
+        db.addon_groups.find(
+            {"restaurant_id": r["id"], "is_active": True}, {"_id": 0}
+        ).sort("sort_order", 1).to_list(500),
         db.banners.find(
             {"restaurant_id": r["id"], "is_active": True}, {"_id": 0}
         ).sort("sort_order", 1).to_list(50),
@@ -389,6 +393,20 @@ async def get_menu(slug: str, response: Response):
     avg = round(sum(rv["rating"] for rv in reviews) / len(reviews), 1) if reviews else 0
     restaurant = clean(r)
     restaurant["is_open"] = is_restaurant_open(r)
+    addons_by_product = {}
+    for group in addon_groups:
+        for product_id in group.get("product_ids") or []:
+            addons_by_product.setdefault(product_id, []).append(group)
+    products = [
+        {
+            **product,
+            "option_groups": merge_option_groups([
+                *(product.get("option_groups") or []),
+                *addons_by_product.get(product.get("id"), []),
+            ]),
+        }
+        for product in products
+    ]
     return {
         "restaurant": restaurant,
         "categories": categories,

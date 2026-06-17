@@ -61,8 +61,14 @@ def _matches_condition(actual, condition):
             return False
         if operator == "$ne" and actual is not _MISSING and actual == expected:
             return False
-        if operator == "$in" and (actual is _MISSING or actual not in expected):
-            return False
+        if operator == "$in":
+            if actual is _MISSING:
+                return False
+            if isinstance(actual, list):
+                if not any(item in expected for item in actual):
+                    return False
+            elif actual not in expected:
+                return False
         if operator == "$nin" and actual is not _MISSING and actual in expected:
             return False
         if operator in {"$gt", "$gte", "$lt", "$lte"}:
@@ -148,6 +154,10 @@ def _apply_update(document, update, inserting=False):
     for path, value in update.get("$push", {}).items():
         current = _get(result, path, [])
         _set(result, path, [*current, value])
+    for path, value in update.get("$pull", {}).items():
+        current = _get(result, path, [])
+        if isinstance(current, list):
+            _set(result, path, [item for item in current if item != value])
     for path in update.get("$unset", {}):
         _unset(result, path)
     if inserting:

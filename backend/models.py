@@ -40,6 +40,12 @@ class OptionGroup(BaseModel):
     options: List[Option] = []
 
 
+class AddonGroupIn(OptionGroup):
+    product_ids: List[str] = []
+    is_active: bool = True
+    sort_order: int = 0
+
+
 # ---------- Category ----------
 class CategoryIn(BaseModel):
     name: str
@@ -62,6 +68,7 @@ class ProductIn(BaseModel):
     is_best_seller: bool = False
     sort_order: int = 0
     option_groups: List[OptionGroup] = []
+    addon_group_ids: List[str] = []
     # Stock
     track_stock: bool = False
     stock_quantity: int = 0

@@ -13,6 +13,7 @@ import AdminLayout from "@/components/admin/AdminLayout";
 import Dashboard from "@/pages/admin/Dashboard";
 import Orders from "@/pages/admin/Orders";
 import Products from "@/pages/admin/Products";
+import AddonGroups from "@/pages/admin/AddonGroups";
 import Categories from "@/pages/admin/Categories";
 import Coupons from "@/pages/admin/Coupons";
 import Banners from "@/pages/admin/Banners";
@@ -67,6 +68,7 @@ function App() {
               <Route path="caixa" element={<Navigate to="/supermaster/pdv" replace />} />
               <Route path="pedidos" element={<Orders />} />
               <Route path="produtos" element={<Products />} />
+              <Route path="adicionais" element={<AddonGroups />} />
               <Route path="categorias" element={<Categories />} />
               <Route path="combos" element={<Combos />} />
               <Route path="estoque" element={<Stock />} />

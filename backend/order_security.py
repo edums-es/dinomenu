@@ -32,6 +32,42 @@ def _active_coupon(coupon: dict) -> bool:
     return not ((starts_at and now < starts_at) or (expires_at and now > expires_at))
 
 
+def merge_option_groups(groups: list[dict]) -> list[dict]:
+    merged = []
+    by_name = {}
+    for group in groups or []:
+        name = group.get("name")
+        if not name:
+            continue
+        if name not in by_name:
+            next_group = dict(group)
+            next_group["options"] = []
+            by_name[name] = next_group
+            merged.append(next_group)
+
+        target = by_name[name]
+        target["required"] = bool(target.get("required") or group.get("required"))
+        if group.get("type") == "multiple":
+            target["type"] = "multiple"
+        target["min"] = max(int(target.get("min") or 0), int(group.get("min") or 0))
+        target["max"] = max(int(target.get("max") or 1), int(group.get("max") or 1))
+
+        seen_options = {
+            (option.get("id") or option.get("name"))
+            for option in target.get("options") or []
+        }
+        for option in group.get("options") or []:
+            key = option.get("id") or option.get("name")
+            if key and key not in seen_options:
+                target["options"].append(option)
+                seen_options.add(key)
+
+    for group in merged:
+        if group.get("type") == "single":
+            group["max"] = 1
+    return merged
+
+
 async def calculate_order(db, restaurant: dict, requested_items, coupon_code=None) -> dict:
     """Build canonical items and totals exclusively from persisted product data."""
     if not requested_items:
@@ -68,9 +104,17 @@ async def calculate_order(db, restaurant: dict, requested_items, coupon_code=Non
         for selected in requested.options or []:
             requested_by_group.setdefault(selected.group, []).append(selected)
 
+        reusable_groups = await db.addon_groups.find({
+            "restaurant_id": restaurant_id,
+            "is_active": True,
+            "product_ids": {"$in": [product["id"]]},
+        }, {"_id": 0}).sort("sort_order", 1).to_list(200)
+        product_groups = product.get("option_groups") or []
+        canonical_groups = merge_option_groups([*product_groups, *reusable_groups])
+
         canonical_options = []
         options_total = 0.0
-        known_groups = {group.get("name"): group for group in product.get("option_groups") or []}
+        known_groups = {group.get("name"): group for group in canonical_groups if group.get("name")}
         unknown_groups = set(requested_by_group) - set(known_groups)
         if unknown_groups:
             raise HTTPException(status_code=400, detail="Adicional invalido para o produto")

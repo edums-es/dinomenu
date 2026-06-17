@@ -15,7 +15,7 @@ from routes_printing import enqueue_print_job
 from flemy import emit_flemy_event
 from order_security import release_stock
 from models import (
-    CategoryIn, ProductIn, CouponIn, BannerIn, RestaurantSettings, StatusUpdate,
+    AddonGroupIn, CategoryIn, ProductIn, CouponIn, BannerIn, RestaurantSettings, StatusUpdate,
     ORDER_STATUSES, clean, new_id, now_iso, is_restaurant_open,
 )
 
@@ -187,6 +187,70 @@ async def update_product(pid: str, data: ProductIn, user=Depends(require_restaur
 @router.delete("/products/{pid}")
 async def delete_product(pid: str, user=Depends(require_restaurant)):
     await db.products.delete_one({"id": pid, "restaurant_id": rid(user)})
+    await db.addon_groups.update_many(
+        {"restaurant_id": rid(user), "product_ids": {"$in": [pid]}},
+        {"$pull": {"product_ids": pid}},
+    )
+    return {"ok": True}
+
+
+# ---------- reusable addon groups ----------
+async def validate_addon_products(product_ids: list[str], restaurant_id: str):
+    clean_ids = [pid for pid in dict.fromkeys(product_ids or []) if pid]
+    if not clean_ids:
+        return []
+    products = await db.products.find(
+        {"restaurant_id": restaurant_id, "id": {"$in": clean_ids}},
+        {"id": 1, "_id": 0},
+    ).to_list(len(clean_ids))
+    found = {p["id"] for p in products}
+    missing = [pid for pid in clean_ids if pid not in found]
+    if missing:
+        raise HTTPException(status_code=400, detail="Produto invalido na lista de adicionais")
+    return clean_ids
+
+
+@router.get("/addon-groups")
+async def list_addon_groups(user=Depends(require_restaurant)):
+    return await db.addon_groups.find(
+        {"restaurant_id": rid(user)}, {"_id": 0}
+    ).sort("sort_order", 1).to_list(500)
+
+
+@router.post("/addon-groups")
+async def create_addon_group(data: AddonGroupIn, user=Depends(require_restaurant)):
+    restaurant_id = rid(user)
+    doc = data.model_dump()
+    doc["product_ids"] = await validate_addon_products(doc.get("product_ids") or [], restaurant_id)
+    if doc.get("sort_order", 0) <= 0:
+        groups = await db.addon_groups.find(
+            {"restaurant_id": restaurant_id}, {"sort_order": 1, "_id": 0}
+        ).to_list(500)
+        doc["sort_order"] = max((g.get("sort_order", 0) for g in groups), default=0) + 1
+    doc.update({"id": new_id(), "restaurant_id": restaurant_id, "created_at": now_iso()})
+    await db.addon_groups.insert_one(doc)
+    return clean(doc)
+
+
+@router.put("/addon-groups/{gid}")
+async def update_addon_group(gid: str, data: AddonGroupIn, user=Depends(require_restaurant)):
+    restaurant_id = rid(user)
+    patch = data.model_dump()
+    patch["id"] = gid
+    patch["product_ids"] = await validate_addon_products(patch.get("product_ids") or [], restaurant_id)
+    patch["updated_at"] = now_iso()
+    res = await db.addon_groups.update_one(
+        {"id": gid, "restaurant_id": restaurant_id},
+        {"$set": patch},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Grupo de adicionais nao encontrado")
+    return await db.addon_groups.find_one({"id": gid, "restaurant_id": restaurant_id}, {"_id": 0})
+
+
+@router.delete("/addon-groups/{gid}")
+async def delete_addon_group(gid: str, user=Depends(require_restaurant)):
+    await db.addon_groups.delete_one({"id": gid, "restaurant_id": rid(user)})
     return {"ok": True}
 
 

@@ -12,7 +12,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
 from models import OrderItemIn, OrderItemOption
-from order_security import calculate_order, next_sequence, reserve_stock
+from order_security import calculate_order, merge_option_groups, next_sequence, reserve_stock
 
 
 class FakeCollection:
@@ -21,9 +21,24 @@ class FakeCollection:
 
     async def find_one(self, query, *args, **kwargs):
         for document in self.documents:
-            if all(document.get(key) == value for key, value in query.items()):
+            if all(self._matches(document, key, value) for key, value in query.items()):
                 return document.copy()
         return None
+
+    def find(self, query, *args, **kwargs):
+        return FakeCursor([
+            document.copy()
+            for document in self.documents
+            if all(self._matches(document, key, value) for key, value in query.items())
+        ])
+
+    def _matches(self, document, key, value):
+        actual = document.get(key)
+        if isinstance(value, dict) and "$in" in value:
+            if isinstance(actual, list):
+                return any(item in value["$in"] for item in actual)
+            return actual in value["$in"]
+        return actual == value
 
     async def update_one(self, query, update, **kwargs):
         for document in self.documents:
@@ -38,6 +53,17 @@ class FakeCollection:
                     document[key] = document.get(key, 0) + value
                 return SimpleNamespace(modified_count=1)
         return SimpleNamespace(modified_count=0)
+
+
+class FakeCursor:
+    def __init__(self, documents):
+        self.documents = documents
+
+    def sort(self, *args, **kwargs):
+        return self
+
+    async def to_list(self, length=None):
+        return self.documents if length is None else self.documents[:length]
 
 
 class FakeSequenceCollection:
@@ -105,6 +131,7 @@ def test_calculator_ignores_client_prices_and_validates_options():
     product = sample_product()
     db = SimpleNamespace(
         products=FakeCollection([product]),
+        addon_groups=FakeCollection([]),
         coupons=FakeCollection([]),
     )
 
@@ -121,6 +148,7 @@ def test_calculator_applies_quantity_discount_from_restaurant_settings():
     product = sample_product(track_stock=False, option_groups=[])
     db = SimpleNamespace(
         products=FakeCollection([product]),
+        addon_groups=FakeCollection([]),
         coupons=FakeCollection([]),
     )
     item = requested_item(quantity=3)
@@ -144,6 +172,7 @@ def test_calculator_applies_quantity_discount_from_restaurant_settings():
 def test_calculator_does_not_accept_product_from_another_restaurant():
     db = SimpleNamespace(
         products=FakeCollection([sample_product(restaurant_id="restaurant-b")]),
+        addon_groups=FakeCollection([]),
         coupons=FakeCollection([]),
     )
 
@@ -162,6 +191,65 @@ def test_stock_reservation_is_atomic_and_rejects_insufficient_stock():
 
     assert error.value.status_code == 409
     assert product["stock_quantity"] == 1
+
+
+def test_calculator_accepts_reusable_addon_groups_for_linked_products():
+    product = sample_product(option_groups=[], track_stock=False)
+    addon = {
+        "id": "addon-a",
+        "restaurant_id": "restaurant-a",
+        "name": "Molhos",
+        "type": "multiple",
+        "required": False,
+        "min": 0,
+        "max": 2,
+        "is_active": True,
+        "product_ids": ["product-a"],
+        "options": [{"id": "bbq", "name": "Barbecue", "price": 3.0}],
+    }
+    db = SimpleNamespace(
+        products=FakeCollection([product]),
+        addon_groups=FakeCollection([addon]),
+        coupons=FakeCollection([]),
+    )
+    item = OrderItemIn(
+        product_id="product-a",
+        product_name="Produto oficial",
+        quantity=1,
+        unit_price=1.0,
+        options=[OrderItemOption(group="Molhos", name="Barbecue", price=0.0)],
+        total_price=1.0,
+    )
+
+    result = asyncio.run(calculate_order(db, {"id": "restaurant-a"}, [item]))
+
+    assert result["items"][0]["options"][0]["price"] == 3.0
+    assert result["subtotal"] == 23.0
+
+
+def test_merge_option_groups_combines_duplicate_group_names():
+    groups = merge_option_groups([
+        {
+            "name": "Adicionais",
+            "type": "multiple",
+            "required": False,
+            "min": 0,
+            "max": 2,
+            "options": [{"id": "bacon", "name": "Bacon", "price": 5}],
+        },
+        {
+            "name": "Adicionais",
+            "type": "multiple",
+            "required": False,
+            "min": 0,
+            "max": 5,
+            "options": [{"id": "cheddar", "name": "Cheddar", "price": 4}],
+        },
+    ])
+
+    assert len(groups) == 1
+    assert groups[0]["max"] == 5
+    assert [option["name"] for option in groups[0]["options"]] == ["Bacon", "Cheddar"]
 
 
 def test_order_numbers_are_unique_and_continue_existing_sequence():

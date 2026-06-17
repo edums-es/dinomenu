@@ -10,7 +10,7 @@ import {
   LayoutDashboard, ClipboardList, UtensilsCrossed, FolderTree, Ticket,
   Image, BarChart3, Settings, LogOut, Menu, X, ExternalLink,
   PackageSearch, Gift, Layers, Users, Building2, ShoppingCart,
-  Wallet, Truck, QrCode, ChevronDown, ChevronRight, MessageCircle,
+  Wallet, Truck, QrCode, ChevronDown, ChevronRight, MessageCircle, BadgePlus,
 } from "lucide-react";
 
 const NAV_GROUPS = [
@@ -27,6 +27,7 @@ const NAV_GROUPS = [
     label: "Cardápio",
     items: [
       { to: "/supermaster/produtos",   label: "Produtos",    icon: UtensilsCrossed },
+      { to: "/supermaster/adicionais", label: "Adicionais",  icon: BadgePlus },
       { to: "/supermaster/categorias", label: "Categorias",  icon: FolderTree },
       { to: "/supermaster/combos",     label: "Combos",      icon: Layers },
       { to: "/supermaster/banners",    label: "Banners",     icon: Image },
