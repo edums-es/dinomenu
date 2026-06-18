@@ -220,17 +220,18 @@ async def sync_restaurant_products(rid: str, data: SyncProducts, user=Depends(SU
 
     existing_products = await db.products.find({"restaurant_id": rid}, {"_id": 0}).to_list(3000)
     products_by_key = {_sync_key(p.get("name")): p for p in existing_products}
+    products_by_source = {
+        str(p.get("source_id")): p for p in existing_products if p.get("source_id") is not None
+    }
 
     created = []
+    updated = []
     skipped = []
     categories_created = []
 
     for index, item in enumerate(data.products, start=1):
         product_key = _sync_key(item.name)
         if not product_key:
-            continue
-        if product_key in products_by_key:
-            skipped.append({"id": products_by_key[product_key]["id"], "name": item.name, "reason": "already_exists"})
             continue
 
         category_id = None
@@ -254,9 +255,11 @@ async def sync_restaurant_products(rid: str, data: SyncProducts, user=Depends(SU
                 categories_created.append({"id": category["id"], "name": category["name"]})
             category_id = category["id"]
 
-        doc = {
-            "id": new_id(),
-            "restaurant_id": rid,
+        existing = products_by_source.get(str(item.source_id)) if item.source_id else None
+        if not existing:
+            existing = products_by_key.get(product_key)
+
+        product_fields = {
             "category_id": category_id,
             "name": item.name,
             "description": item.description or "",
@@ -276,6 +279,23 @@ async def sync_restaurant_products(rid: str, data: SyncProducts, user=Depends(SU
             "upsell_product_id": None,
             "downsell_product_id": None,
             "source_id": item.source_id,
+        }
+
+        if existing:
+            await db.products.update_one(
+                {"id": existing["id"], "restaurant_id": rid},
+                {"$set": {**product_fields, "updated_at": now_iso()}},
+            )
+            updated.append({"id": existing["id"], "name": item.name, "category_name": category_name})
+            products_by_key[product_key] = {**existing, **product_fields}
+            if item.source_id:
+                products_by_source[str(item.source_id)] = {**existing, **product_fields}
+            continue
+
+        doc = {
+            "id": new_id(),
+            "restaurant_id": rid,
+            **product_fields,
             "created_at": now_iso(),
         }
         await db.products.insert_one(doc)
@@ -285,6 +305,7 @@ async def sync_restaurant_products(rid: str, data: SyncProducts, user=Depends(SU
     return {
         "ok": True,
         "created": created,
+        "updated": updated,
         "skipped": skipped,
         "categories_created": categories_created,
     }
