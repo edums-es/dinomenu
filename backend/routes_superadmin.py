@@ -30,6 +30,31 @@ class SyncAddonGroups(BaseModel):
     groups: list[AddonGroupIn]
 
 
+class ProductSyncItem(BaseModel):
+    category_name: str | None = None
+    name: str
+    description: str | None = ""
+    image_url: str | None = None
+    price: float = 0.0
+    is_available: bool = True
+    is_featured: bool = False
+    is_best_seller: bool = False
+    sort_order: int = 0
+    source_id: str | None = None
+
+
+class SyncProducts(BaseModel):
+    products: list[ProductSyncItem]
+
+
+def _sync_key(value: str | None) -> str:
+    import re
+    import unicodedata
+
+    value = unicodedata.normalize("NFKD", value or "").encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+
+
 async def validate_restaurant_product_ids(rid: str, product_ids: list[str]) -> list[str]:
     clean_ids = [pid for pid in dict.fromkeys(product_ids or []) if pid]
     if not clean_ids:
@@ -181,6 +206,88 @@ async def sync_restaurant_addon_groups(rid: str, data: SyncAddonGroups, user=Dep
             synced.append({"id": doc["id"], "name": doc["name"], "action": "created"})
 
     return {"ok": True, "synced": synced}
+
+
+@router.put("/restaurants/{rid}/products/sync")
+async def sync_restaurant_products(rid: str, data: SyncProducts, user=Depends(SUPER)):
+    restaurant = await db.restaurants.find_one({"id": rid}, {"id": 1, "_id": 0})
+    if not restaurant:
+        raise HTTPException(404, "Restaurante nao encontrado")
+
+    existing_categories = await db.categories.find({"restaurant_id": rid}, {"_id": 0}).to_list(1000)
+    categories_by_key = {_sync_key(c.get("name")): c for c in existing_categories}
+    max_category_order = max((c.get("sort_order", 0) for c in existing_categories), default=0)
+
+    existing_products = await db.products.find({"restaurant_id": rid}, {"_id": 0}).to_list(3000)
+    products_by_key = {_sync_key(p.get("name")): p for p in existing_products}
+
+    created = []
+    skipped = []
+    categories_created = []
+
+    for index, item in enumerate(data.products, start=1):
+        product_key = _sync_key(item.name)
+        if not product_key:
+            continue
+        if product_key in products_by_key:
+            skipped.append({"id": products_by_key[product_key]["id"], "name": item.name, "reason": "already_exists"})
+            continue
+
+        category_id = None
+        category_name = (item.category_name or "").strip()
+        if category_name:
+            category_key = _sync_key(category_name)
+            category = categories_by_key.get(category_key)
+            if not category:
+                max_category_order += 1
+                category = {
+                    "id": new_id(),
+                    "restaurant_id": rid,
+                    "name": category_name,
+                    "icon": None,
+                    "is_active": True,
+                    "sort_order": max_category_order,
+                    "created_at": now_iso(),
+                }
+                await db.categories.insert_one(category)
+                categories_by_key[category_key] = category
+                categories_created.append({"id": category["id"], "name": category["name"]})
+            category_id = category["id"]
+
+        doc = {
+            "id": new_id(),
+            "restaurant_id": rid,
+            "category_id": category_id,
+            "name": item.name,
+            "description": item.description or "",
+            "image_url": item.image_url,
+            "price": item.price,
+            "wholesale_price": None,
+            "promotional_price": None,
+            "is_available": item.is_available,
+            "is_featured": item.is_featured,
+            "is_best_seller": item.is_best_seller,
+            "sort_order": item.sort_order or (len(existing_products) + len(created) + index),
+            "option_groups": [],
+            "addon_group_ids": [],
+            "track_stock": False,
+            "stock_quantity": 0,
+            "low_stock_threshold": 5,
+            "upsell_product_id": None,
+            "downsell_product_id": None,
+            "source_id": item.source_id,
+            "created_at": now_iso(),
+        }
+        await db.products.insert_one(doc)
+        products_by_key[product_key] = doc
+        created.append({"id": doc["id"], "name": doc["name"], "category_name": category_name})
+
+    return {
+        "ok": True,
+        "created": created,
+        "skipped": skipped,
+        "categories_created": categories_created,
+    }
 
 @router.get("/restaurants/{rid}/orders")
 async def restaurant_orders(rid: str, user=Depends(SUPER)):
