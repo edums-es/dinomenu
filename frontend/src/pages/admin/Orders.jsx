@@ -10,6 +10,7 @@ import {
   MessageCircle, Printer, Loader2, ClipboardList,
   Clock, MapPin, User, Phone, ChevronRight, ChevronDown,
   ShoppingBag, CheckCircle2, XCircle, Bike, Bell, Search, Filter,
+  Download, Archive, CalendarClock, BarChart3, RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useOrdersWS } from "@/hooks/useOrdersWS";
@@ -64,6 +65,27 @@ function StatusBadge({ status }) {
 }
 
 // ── Order card (inside Kanban column) ─────────────────────────────────────
+function shortDateTime(iso) {
+  if (!iso) return "-";
+  try {
+    return new Date(iso).toLocaleString("pt-BR", {
+      day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function buildQueryParams({ cycleMode, statusFilter, sourceFilter, paymentFilter, dateFrom, dateTo }) {
+  const params = { cycle: cycleMode, limit: cycleMode === "current" ? 800 : 3000 };
+  if (statusFilter) params.status = statusFilter;
+  if (sourceFilter) params.source = sourceFilter;
+  if (paymentFilter) params.payment_status = paymentFilter;
+  if (dateFrom) params.start_date = dateFrom;
+  if (dateTo) params.end_date = dateTo;
+  return params;
+}
+
 function OrderCard({ order, onSelect, onStatusChange }) {
   const col = COL_MAP[order.status] || {};
   const nexts = NEXT_STATUS[order.status] || [];
@@ -325,10 +347,19 @@ ${order.customer_notes ? `Obs: ${order.customer_notes}` : ""}
 // ── Main Orders page ───────────────────────────────────────────────────────
 export default function Orders() {
   const [orders, setOrders] = useState([]);
+  const [summary, setSummary] = useState(null);
+  const [cycles, setCycles] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [cycleLoading, setCycleLoading] = useState(false);
   const [selected, setSelected] = useState(null);
   const [search, setSearch] = useState("");
   const [view, setView] = useState("kanban"); // "kanban" | "list"
+  const [cycleMode, setCycleMode] = useState("current"); // "current" | "history" | "all"
+  const [statusFilter, setStatusFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
+  const [paymentFilter, setPaymentFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [collapsed, setCollapsed] = useState({});
   const prevPendingCount = useRef(0);
   const prevCancelCount = useRef(-1);
@@ -345,8 +376,16 @@ export default function Orders() {
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const { data } = await api.get("/admin/orders");
+      const params = buildQueryParams({ cycleMode, statusFilter, sourceFilter, paymentFilter, dateFrom, dateTo });
+      const [ordersRes, summaryRes, cyclesRes] = await Promise.all([
+        api.get("/admin/orders", { params }),
+        api.get("/admin/orders/summary", { params }),
+        api.get("/admin/order-cycles"),
+      ]);
+      const data = ordersRes.data || [];
       setOrders(data);
+      setSummary(summaryRes.data || null);
+      setCycles(cyclesRes.data || []);
 
       // Novo pedido — exclui os que estao aguardando Pix (ainda nao foram pagos)
       const pendingNow = data.filter(
@@ -369,7 +408,7 @@ export default function Orders() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [playOrderSound]);
+  }, [cycleMode, statusFilter, sourceFilter, paymentFilter, dateFrom, dateTo, playOrderSound]);
 
   // Auth context para pegar token e restaurant_id
   const { user, token } = useAuth();
@@ -410,6 +449,55 @@ export default function Orders() {
     toast.success("Pedido enviado para a fila de impressão");
   };
 
+  const exportOrders = async () => {
+    try {
+      const params = buildQueryParams({ cycleMode, statusFilter, sourceFilter, paymentFilter, dateFrom, dateTo });
+      const res = await api.get("/admin/orders/export", { params, responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `pedidos-${cycleMode}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Erro ao exportar pedidos");
+    }
+  };
+
+  const closeCycle = async (period) => {
+    const label = period === "week" ? "semana" : "dia";
+    if (!window.confirm(`Fechar o ciclo do ${label}? Pedidos finalizados saem do ciclo atual e continuam no historico.`)) return;
+    setCycleLoading(true);
+    try {
+      const { data } = await api.post("/admin/order-cycles/close", { period });
+      toast.success(`Ciclo fechado: ${data.orders_count} pedido(s), ${brl(data.revenue)}`);
+      if (data.open_orders_left > 0) {
+        toast.info(`${data.open_orders_left} pedido(s) em aberto ficaram no ciclo atual`);
+      }
+      await load(true);
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Nao foi possivel fechar o ciclo");
+    } finally {
+      setCycleLoading(false);
+    }
+  };
+
+  const reopenCycle = async (cycle) => {
+    if (!window.confirm(`Reabrir "${cycle.label}"? Os pedidos voltam para o ciclo atual.`)) return;
+    setCycleLoading(true);
+    try {
+      await api.post(`/admin/order-cycles/${cycle.id}/reopen`);
+      toast.success("Ciclo reaberto");
+      await load(true);
+    } catch {
+      toast.error("Erro ao reabrir ciclo");
+    } finally {
+      setCycleLoading(false);
+    }
+  };
+
   const filteredOrders = orders.filter((o) => {
     if (!search) return true;
     const q = search.toLowerCase();
@@ -425,6 +513,8 @@ export default function Orders() {
   );
 
   const toggleCollapse = (key) => setCollapsed((c) => ({ ...c, [key]: !c[key] }));
+  const stats = summary?.summary || {};
+  const lastCycle = summary?.last_cycle;
 
   if (loading) return (
     <div className="grid place-items-center py-20">
@@ -437,7 +527,97 @@ export default function Orders() {
       {/* Status bar */}
       <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500">
         <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"/>
-        Atualizando a cada 5s · alertas sonoros automáticos
+        Atualizando a cada 30s · alertas sonoros automáticos
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { label: "Receita do filtro", value: brl(stats.revenue || 0), icon: BarChart3, color: "text-emerald-500" },
+          { label: "Pedidos validos", value: stats.valid_orders || 0, icon: ClipboardList, color: "text-indigo-500" },
+          { label: "Ticket medio", value: brl(stats.avg_ticket || 0), icon: ShoppingBag, color: "text-amber-500" },
+          { label: "Em andamento", value: stats.in_progress || 0, icon: Clock, color: "text-cyan-500" },
+        ].map((item) => (
+          <div key={item.label} className="bg-white dark:bg-[#1E2430] border border-gray-100 dark:border-gray-700 rounded-2xl p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-gray-400">{item.label}</p>
+              <item.icon className={`w-4 h-4 ${item.color}`} />
+            </div>
+            <p className="font-display font-bold text-xl mt-2 dark:text-white">{item.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-white dark:bg-[#1E2430] border border-gray-100 dark:border-gray-700 rounded-2xl p-4 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-display font-bold dark:text-white flex items-center gap-2">
+              <Archive className="w-4 h-4 text-indigo-500" /> Ciclo de pedidos
+            </h2>
+            <p className="text-xs text-gray-400 mt-1">
+              Feche dia ou semana para limpar a operacao atual sem apagar historico.
+              {lastCycle && <span> Ultimo fechamento: {shortDateTime(lastCycle.closed_at)}.</span>}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => closeCycle("day")} disabled={cycleLoading} className="dark:border-gray-700 dark:text-gray-300">
+              <CalendarClock className="w-4 h-4 mr-1" /> Fechar dia
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => closeCycle("week")} disabled={cycleLoading} className="dark:border-gray-700 dark:text-gray-300">
+              <Archive className="w-4 h-4 mr-1" /> Fechar semana
+            </Button>
+            <Button size="sm" variant="outline" onClick={exportOrders} className="dark:border-gray-700 dark:text-gray-300">
+              <Download className="w-4 h-4 mr-1" /> Exportar
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
+          <select value={cycleMode} onChange={(e) => setCycleMode(e.target.value)}
+            className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white text-sm outline-none">
+            <option value="current">Ciclo atual</option>
+            <option value="history">Historico fechado</option>
+            <option value="all">Todos os pedidos</option>
+          </select>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white text-sm outline-none">
+            <option value="">Todos status</option>
+            {COLUMNS.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+          </select>
+          <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}
+            className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white text-sm outline-none">
+            <option value="">Todos canais</option>
+            <option value="online">Cardapio online</option>
+            <option value="pdv">PDV</option>
+            <option value="whatsapp">WhatsApp</option>
+          </select>
+          <select value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value)}
+            className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white text-sm outline-none">
+            <option value="">Todos pagamentos</option>
+            <option value="pending">Pendente</option>
+            <option value="awaiting">Aguardando Pix</option>
+            <option value="paid">Pago</option>
+          </select>
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+            className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white text-sm outline-none" />
+          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+            className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white text-sm outline-none" />
+        </div>
+
+        {cycles.length > 0 && cycleMode === "history" && (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {cycles.slice(0, 8).map((cycle) => (
+              <div key={cycle.id} className="shrink-0 rounded-xl border border-gray-100 dark:border-gray-700 px-3 py-2 min-w-[220px]">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold dark:text-white truncate">{cycle.label}</p>
+                  <button onClick={() => reopenCycle(cycle)} className="text-xs text-indigo-500 hover:underline flex items-center gap-1">
+                    <RotateCcw className="w-3 h-3" /> reabrir
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">{shortDateTime(cycle.closed_at)} · {cycle.orders_count} pedidos · {brl(cycle.revenue)}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Toolbar */}

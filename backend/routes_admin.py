@@ -6,6 +6,7 @@ from datetime import datetime, timezone, timedelta
 import openpyxl
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from db import db
 from auth import require_restaurant
@@ -24,6 +25,13 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 def rid(user):
     return user["restaurant_id"]
+
+
+class OrderCycleCloseIn(BaseModel):
+    period: str = "day"
+    start_date: str | None = None
+    end_date: str | None = None
+    label: str | None = None
 
 
 # ---------- restaurant config ----------
@@ -415,12 +423,362 @@ async def import_products(file: UploadFile = File(...), user=Depends(require_res
 
 
 # ---------- orders ----------
+TERMINAL_ORDER_STATUSES = {"completed", "cancelled"}
+
+
+def _local_date_to_utc_iso(value: str | None, end_of_day: bool = False):
+    if not value:
+        return None
+    try:
+        from zoneinfo import ZoneInfo
+        local_tz = ZoneInfo("America/Sao_Paulo")
+    except Exception:
+        local_tz = timezone.utc
+
+    raw = value.strip()
+    try:
+        if len(raw) == 10:
+            dt = datetime.strptime(raw, "%Y-%m-%d")
+            if end_of_day:
+                dt = dt.replace(hour=23, minute=59, second=59, microsecond=999000)
+            else:
+                dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+            dt = dt.replace(tzinfo=local_tz)
+        else:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=local_tz)
+        return dt.astimezone(timezone.utc).isoformat()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Data invalida")
+
+
+def _order_query(
+    restaurant_id: str,
+    status: str | None = None,
+    payment_status: str | None = None,
+    source: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    cycle: str = "current",
+):
+    conditions = [{"restaurant_id": restaurant_id}]
+
+    if status and status != "all":
+        conditions.append({"status": status})
+    if payment_status and payment_status != "all":
+        conditions.append({"payment_status": payment_status})
+    if source and source != "all":
+        if source == "online":
+            conditions.append({"$or": [{"source": {"$exists": False}}, {"source": {"$in": ["online", "web", "public"]}}]})
+        else:
+            conditions.append({"source": source})
+    if cycle == "current":
+        conditions.append({"$or": [{"cycle_id": {"$exists": False}}, {"cycle_id": None}]})
+    elif cycle == "history":
+        conditions.append({"cycle_id": {"$exists": True, "$ne": None}})
+
+    created = {}
+    start_iso = _local_date_to_utc_iso(start_date, False)
+    end_iso = _local_date_to_utc_iso(end_date, True)
+    if start_iso:
+        created["$gte"] = start_iso
+    if end_iso:
+        created["$lte"] = end_iso
+    if created:
+        conditions.append({"created_at": created})
+
+    return {"$and": conditions} if len(conditions) > 1 else conditions[0]
+
+
+def _search_order(order, text: str | None):
+    if not text:
+        return True
+    q = text.strip().lower()
+    if not q:
+        return True
+    customer = order.get("customer") or {}
+    haystack = " ".join([
+        str(order.get("order_number") or ""),
+        str(order.get("id") or ""),
+        str(customer.get("name") or ""),
+        str(customer.get("phone") or ""),
+        str(order.get("payment_method") or ""),
+    ]).lower()
+    return q in haystack
+
+
+async def _fetch_orders_for_admin(
+    restaurant_id: str,
+    status: str | None = None,
+    payment_status: str | None = None,
+    source: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    cycle: str = "current",
+    search: str | None = None,
+    limit: int = 500,
+):
+    max_limit = min(max(limit or 500, 1), 10000)
+    query = _order_query(restaurant_id, status, payment_status, source, start_date, end_date, cycle)
+    fetch_limit = 10000 if search else max_limit
+    orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(fetch_limit)
+    if search:
+        orders = [o for o in orders if _search_order(o, search)][:max_limit]
+    return orders
+
+
+def _source_label(order):
+    source = order.get("source")
+    if source == "pdv":
+        return "PDV"
+    if source == "whatsapp":
+        return "WhatsApp"
+    return "Online"
+
+
+def _build_orders_summary(orders):
+    valid_orders = [o for o in orders if o.get("status") != "cancelled"]
+    revenue = round(sum(float(o.get("total") or 0) for o in valid_orders), 2)
+    total_orders = len(orders)
+    by_status = {key: 0 for key in ORDER_STATUSES}
+    by_payment = {}
+    by_source = {}
+    by_day = {}
+
+    for order in orders:
+        status = order.get("status") or "pending"
+        by_status[status] = by_status.get(status, 0) + 1
+        if status != "cancelled":
+            total = float(order.get("total") or 0)
+            payment = order.get("payment_method") or "outros"
+            by_payment[payment] = round(by_payment.get(payment, 0) + total, 2)
+            source = _source_label(order)
+            by_source[source] = round(by_source.get(source, 0) + total, 2)
+            day = (order.get("created_at") or "")[:10] or "sem-data"
+            if day not in by_day:
+                by_day[day] = {"date": day, "orders": 0, "revenue": 0.0}
+            by_day[day]["orders"] += 1
+            by_day[day]["revenue"] = round(by_day[day]["revenue"] + total, 2)
+
+    return {
+        "summary": {
+            "orders": total_orders,
+            "valid_orders": len(valid_orders),
+            "revenue": revenue,
+            "avg_ticket": round(revenue / len(valid_orders), 2) if valid_orders else 0,
+            "pending": by_status.get("pending", 0),
+            "in_progress": sum(by_status.get(s, 0) for s in ["accepted", "preparing", "ready", "out_for_delivery"]),
+            "cancelled": by_status.get("cancelled", 0),
+        },
+        "by_status": by_status,
+        "by_payment": by_payment,
+        "by_source": by_source,
+        "by_day": sorted(by_day.values(), key=lambda item: item["date"]),
+    }
+
+
 @router.get("/orders")
-async def list_orders(status: str = None, user=Depends(require_restaurant)):
-    q = {"restaurant_id": rid(user)}
-    if status:
-        q["status"] = status
-    return await db.orders.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+async def list_orders(
+    status: str = None,
+    payment_status: str = None,
+    source: str = None,
+    start_date: str = None,
+    end_date: str = None,
+    cycle: str = "current",
+    search: str = None,
+    limit: int = 500,
+    user=Depends(require_restaurant),
+):
+    return await _fetch_orders_for_admin(
+        rid(user), status, payment_status, source, start_date, end_date, cycle, search, limit
+    )
+
+
+@router.get("/orders/summary")
+async def orders_summary(
+    status: str = None,
+    payment_status: str = None,
+    source: str = None,
+    start_date: str = None,
+    end_date: str = None,
+    cycle: str = "current",
+    search: str = None,
+    user=Depends(require_restaurant),
+):
+    orders = await _fetch_orders_for_admin(
+        rid(user), status, payment_status, source, start_date, end_date, cycle, search, 10000
+    )
+    last_cycle = await db.order_cycles.find_one(
+        {"restaurant_id": rid(user)}, {"_id": 0}, sort=[("closed_at", -1)]
+    )
+    data = _build_orders_summary(orders)
+    data["last_cycle"] = last_cycle
+    data["filters"] = {
+        "status": status or "all",
+        "payment_status": payment_status or "all",
+        "source": source or "all",
+        "start_date": start_date,
+        "end_date": end_date,
+        "cycle": cycle,
+    }
+    return data
+
+
+@router.get("/orders/export")
+async def export_orders(
+    status: str = None,
+    payment_status: str = None,
+    source: str = None,
+    start_date: str = None,
+    end_date: str = None,
+    cycle: str = "current",
+    search: str = None,
+    user=Depends(require_restaurant),
+):
+    orders = await _fetch_orders_for_admin(
+        rid(user), status, payment_status, source, start_date, end_date, cycle, search, 10000
+    )
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Pedidos"
+    ws.append([
+        "Numero", "Criado em", "Cliente", "Telefone", "Status", "Canal",
+        "Tipo", "Pagamento", "Subtotal", "Entrega", "Desconto", "Total",
+        "Itens", "Ciclo",
+    ])
+    for order in orders:
+        customer = order.get("customer") or {}
+        items = "; ".join(
+            f"{item.get('quantity', 1)}x {item.get('product_name', '')}"
+            for item in order.get("items", [])
+        )
+        ws.append([
+            order.get("order_number"),
+            order.get("created_at"),
+            customer.get("name"),
+            customer.get("phone"),
+            order.get("status"),
+            _source_label(order),
+            order.get("type"),
+            order.get("payment_method"),
+            float(order.get("subtotal") or 0),
+            float(order.get("delivery_fee") or 0),
+            float(order.get("discount") or 0),
+            float(order.get("total") or 0),
+            items,
+            order.get("cycle_label") or order.get("cycle_id") or "",
+        ])
+    for col in ws.columns:
+        width = min(max(len(str(cell.value or "")) for cell in col) + 2, 44)
+        ws.column_dimensions[col[0].column_letter].width = width
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=pedidos.xlsx"},
+    )
+
+
+@router.get("/order-cycles")
+async def list_order_cycles(user=Depends(require_restaurant)):
+    return await db.order_cycles.find(
+        {"restaurant_id": rid(user)}, {"_id": 0}
+    ).sort("closed_at", -1).to_list(200)
+
+
+def _cycle_bounds(period: str, start_date: str | None, end_date: str | None):
+    try:
+        from zoneinfo import ZoneInfo
+        local_tz = ZoneInfo("America/Sao_Paulo")
+    except Exception:
+        local_tz = timezone.utc
+
+    now_local = datetime.now(local_tz)
+    if period == "custom":
+        if not start_date or not end_date:
+            raise HTTPException(status_code=400, detail="Informe data inicial e final")
+        return _local_date_to_utc_iso(start_date, False), _local_date_to_utc_iso(end_date, True)
+    if period == "week":
+        start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=now_local.weekday())
+    else:
+        start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    return start_local.astimezone(timezone.utc).isoformat(), datetime.now(timezone.utc).isoformat()
+
+
+@router.post("/order-cycles/close")
+async def close_order_cycle(data: OrderCycleCloseIn, user=Depends(require_restaurant)):
+    period = data.period if data.period in {"day", "week", "custom"} else "day"
+    start_iso, end_iso = _cycle_bounds(period, data.start_date, data.end_date)
+    restaurant_id = rid(user)
+    base_query = {
+        "$and": [
+            {"restaurant_id": restaurant_id},
+            {"created_at": {"$gte": start_iso, "$lte": end_iso}},
+            {"$or": [{"cycle_id": {"$exists": False}}, {"cycle_id": None}]},
+        ]
+    }
+    closable_query = {
+        "$and": [
+            base_query,
+            {"status": {"$in": list(TERMINAL_ORDER_STATUSES)}},
+        ]
+    }
+    orders = await db.orders.find(closable_query, {"_id": 0}).to_list(10000)
+    open_orders = await db.orders.count_documents({
+        "$and": [
+            base_query,
+            {"status": {"$nin": list(TERMINAL_ORDER_STATUSES)}},
+        ]
+    })
+    if not orders:
+        raise HTTPException(
+            status_code=400,
+            detail="Nenhum pedido finalizado ou cancelado encontrado para fechar neste ciclo",
+        )
+
+    summary = _build_orders_summary(orders)["summary"]
+    closed_at = now_iso()
+    label = data.label or ("Fechamento diario" if period == "day" else "Fechamento semanal" if period == "week" else "Fechamento personalizado")
+    doc = {
+        "id": new_id(),
+        "restaurant_id": restaurant_id,
+        "period": period,
+        "label": label,
+        "started_at": start_iso,
+        "ended_at": end_iso,
+        "closed_at": closed_at,
+        "orders_count": summary["orders"],
+        "valid_orders": summary["valid_orders"],
+        "cancelled_orders": summary["cancelled"],
+        "revenue": summary["revenue"],
+        "avg_ticket": summary["avg_ticket"],
+        "open_orders_left": open_orders,
+        "created_by": user.get("id"),
+    }
+    await db.order_cycles.insert_one(doc)
+    await db.orders.update_many(
+        {"id": {"$in": [o["id"] for o in orders]}, "restaurant_id": restaurant_id},
+        {"$set": {"cycle_id": doc["id"], "cycle_label": label, "cycle_closed_at": closed_at, "updated_at": closed_at}},
+    )
+    return clean(doc)
+
+
+@router.post("/order-cycles/{cycle_id}/reopen")
+async def reopen_order_cycle(cycle_id: str, user=Depends(require_restaurant)):
+    cycle = await db.order_cycles.find_one({"id": cycle_id, "restaurant_id": rid(user)}, {"_id": 0})
+    if not cycle:
+        raise HTTPException(status_code=404, detail="Ciclo nao encontrado")
+    await db.orders.update_many(
+        {"restaurant_id": rid(user), "cycle_id": cycle_id},
+        {"$unset": {"cycle_id": "", "cycle_label": "", "cycle_closed_at": ""}, "$set": {"updated_at": now_iso()}},
+    )
+    await db.order_cycles.delete_one({"id": cycle_id, "restaurant_id": rid(user)})
+    return {"ok": True}
 
 
 @router.get("/orders/{oid}")
