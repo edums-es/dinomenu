@@ -534,6 +534,8 @@ def _source_label(order):
         return "PDV"
     if source == "whatsapp":
         return "WhatsApp"
+    if source == "table_qr":
+        return "Mesa / QR"
     return "Online"
 
 
@@ -796,9 +798,26 @@ async def update_order_status(oid: str, data: StatusUpdate, user=Depends(require
     previous_order = await db.orders.find_one({"id": oid, "restaurant_id": rid(user)}, {"_id": 0})
     if not previous_order:
         raise HTTPException(status_code=404, detail="Pedido nao encontrado")
+    updates = {"status": data.status, "updated_at": now_iso()}
+    if data.status == "out_for_delivery" and data.delivery_person_id:
+        delivery_person = await db.delivery_people.find_one(
+            {"id": data.delivery_person_id, "restaurant_id": rid(user), "is_active": True},
+            {"_id": 0},
+        )
+        if not delivery_person:
+            raise HTTPException(status_code=400, detail="Entregador invalido")
+        updates["delivery_person"] = {
+            "id": delivery_person["id"],
+            "name": delivery_person.get("name"),
+            "phone": delivery_person.get("phone"),
+            "vehicle_type": delivery_person.get("vehicle_type"),
+            "vehicle_plate": delivery_person.get("vehicle_plate"),
+            "delivery_fee": delivery_person.get("delivery_fee", 0),
+        }
+        updates["delivery_assigned_at"] = now_iso()
     res = await db.orders.update_one(
         {"id": oid, "restaurant_id": rid(user)},
-        {"$set": {"status": data.status, "updated_at": now_iso()}})
+        {"$set": updates})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Pedido não encontrado")
     order = await db.orders.find_one({"id": oid, "restaurant_id": rid(user)}, {"_id": 0})
@@ -814,6 +833,17 @@ async def update_order_status(oid: str, data: StatusUpdate, user=Depends(require
             {"$set": {"stock_released_at": now_iso()}},
         )
         order["stock_released_at"] = now_iso()
+    if order.get("table_id") and data.status in {"completed", "cancelled"}:
+        open_table_orders = await db.orders.count_documents({
+            "restaurant_id": order["restaurant_id"],
+            "table_id": order["table_id"],
+            "status": {"$nin": ["completed", "cancelled"]},
+        })
+        if open_table_orders == 0:
+            await db.tables.update_one(
+                {"id": order["table_id"], "restaurant_id": order["restaurant_id"]},
+                {"$set": {"status": "available", "updated_at": now_iso()}},
+            )
     # Fire-and-forget WhatsApp notification
     asyncio.create_task(notify_order_status(order, data.status))
     asyncio.create_task(enqueue_print_job(order, "auto_status"))

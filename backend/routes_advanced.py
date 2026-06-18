@@ -373,13 +373,49 @@ class TableIn(BaseModel):
     number: int
     name: Optional[str] = ""
     capacity: int = 4
+    waiter_id: Optional[str] = None
+
+
+class WaiterIn(BaseModel):
+    name: str
+    phone: Optional[str] = ""
+    code: Optional[str] = ""
+    shift: Optional[str] = ""
+    is_active: bool = True
+    notes: Optional[str] = ""
+
+
+class DeliveryPersonIn(BaseModel):
+    name: str
+    phone: Optional[str] = ""
+    vehicle_type: Optional[str] = "moto"
+    vehicle_plate: Optional[str] = ""
+    daily_rate: float = 0.0
+    delivery_fee: float = 0.0
+    is_active: bool = True
+    notes: Optional[str] = ""
+
+
+async def _enrich_tables_with_waiters(tables: list[dict], restaurant_id: str):
+    waiter_ids = [t.get("waiter_id") for t in tables if t.get("waiter_id")]
+    if not waiter_ids:
+        return tables
+    waiters = await db.waiters.find(
+        {"restaurant_id": restaurant_id, "id": {"$in": waiter_ids}},
+        {"_id": 0, "id": 1, "name": 1, "phone": 1, "code": 1},
+    ).to_list(len(waiter_ids))
+    waiter_map = {w["id"]: w for w in waiters}
+    for table in tables:
+        table["waiter"] = waiter_map.get(table.get("waiter_id"))
+    return tables
 
 
 @router.get("/tables")
 async def list_tables(user=Depends(require_restaurant)):
-    return await db.tables.find(
+    tables = await db.tables.find(
         {"restaurant_id": rid(user)}, {"_id": 0}
     ).sort("number", 1).to_list(500)
+    return await _enrich_tables_with_waiters(tables, rid(user))
 
 
 @router.post("/tables")
@@ -387,8 +423,12 @@ async def create_table(data: TableIn, user=Depends(require_restaurant)):
     existing = await db.tables.find_one({"restaurant_id": rid(user), "number": data.number})
     if existing:
         raise HTTPException(400, f"Mesa {data.number} já existe.")
+    if data.waiter_id:
+        waiter = await db.waiters.find_one({"id": data.waiter_id, "restaurant_id": rid(user), "is_active": True})
+        if not waiter:
+            raise HTTPException(400, "Garcom invalido.")
     doc = data.model_dump()
-    doc.update({"id": new_id(), "restaurant_id": rid(user), "created_at": now_iso()})
+    doc.update({"id": new_id(), "restaurant_id": rid(user), "status": "available", "created_at": now_iso()})
     await db.tables.insert_one(doc)
     return clean(doc)
 
@@ -398,6 +438,10 @@ async def update_table(table_id: str, data: TableIn, user=Depends(require_restau
     existing = await db.tables.find_one({"id": table_id, "restaurant_id": rid(user)})
     if not existing:
         raise HTTPException(404, "Mesa não encontrada.")
+    if data.waiter_id:
+        waiter = await db.waiters.find_one({"id": data.waiter_id, "restaurant_id": rid(user), "is_active": True})
+        if not waiter:
+            raise HTTPException(400, "Garcom invalido.")
     updates = data.model_dump()
     updates["updated_at"] = now_iso()
     await db.tables.update_one(
@@ -432,6 +476,7 @@ async def table_qr_data(table_id: str, user=Depends(require_restaurant)):
         "table_name": table.get("name") or f"Mesa {table['number']}",
         "table_id": table["id"],
         "capacity": table.get("capacity"),
+        "waiter_id": table.get("waiter_id"),
     }
 
 
@@ -451,4 +496,107 @@ async def validate_table(slug: str, table_number: int):
         "table_number": table["number"],
         "table_name": table.get("name") or f"Mesa {table_number}",
         "capacity": table.get("capacity"),
+        "waiter_id": table.get("waiter_id"),
     }
+
+
+@router.get("/waiters")
+async def list_waiters(active_only: bool = False, user=Depends(require_restaurant)):
+    query = {"restaurant_id": rid(user)}
+    if active_only:
+        query["is_active"] = True
+    waiters = await db.waiters.find(query, {"_id": 0}).sort("name", 1).to_list(500)
+    for waiter in waiters:
+        waiter["tables_count"] = await db.tables.count_documents(
+            {"restaurant_id": rid(user), "waiter_id": waiter["id"]}
+        )
+        waiter["open_orders_count"] = await db.orders.count_documents(
+            {
+                "restaurant_id": rid(user),
+                "waiter_id": waiter["id"],
+                "status": {"$nin": ["completed", "cancelled"]},
+            }
+        )
+    return waiters
+
+
+@router.post("/waiters")
+async def create_waiter(data: WaiterIn, user=Depends(require_restaurant)):
+    doc = data.model_dump()
+    doc.update({"id": new_id(), "restaurant_id": rid(user), "created_at": now_iso()})
+    await db.waiters.insert_one(doc)
+    return clean(doc)
+
+
+@router.put("/waiters/{waiter_id}")
+async def update_waiter(waiter_id: str, data: WaiterIn, user=Depends(require_restaurant)):
+    updates = data.model_dump()
+    updates["updated_at"] = now_iso()
+    result = await db.waiters.update_one(
+        {"id": waiter_id, "restaurant_id": rid(user)}, {"$set": updates}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "Garcom nao encontrado.")
+    return clean(await db.waiters.find_one({"id": waiter_id, "restaurant_id": rid(user)}, {"_id": 0}))
+
+
+@router.delete("/waiters/{waiter_id}")
+async def delete_waiter(waiter_id: str, user=Depends(require_restaurant)):
+    result = await db.waiters.delete_one({"id": waiter_id, "restaurant_id": rid(user)})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Garcom nao encontrado.")
+    await db.tables.update_many(
+        {"restaurant_id": rid(user), "waiter_id": waiter_id},
+        {"$unset": {"waiter_id": ""}, "$set": {"updated_at": now_iso()}},
+    )
+    return {"ok": True}
+
+
+@router.get("/delivery-people")
+async def list_delivery_people(active_only: bool = False, user=Depends(require_restaurant)):
+    query = {"restaurant_id": rid(user)}
+    if active_only:
+        query["is_active"] = True
+    people = await db.delivery_people.find(query, {"_id": 0}).sort("name", 1).to_list(500)
+    today = datetime.now(timezone.utc).date().isoformat()
+    for person in people:
+        person["active_orders_count"] = await db.orders.count_documents({
+            "restaurant_id": rid(user),
+            "delivery_person.id": person["id"],
+            "status": "out_for_delivery",
+        })
+        person["delivered_today"] = await db.orders.count_documents({
+            "restaurant_id": rid(user),
+            "delivery_person.id": person["id"],
+            "status": "completed",
+            "updated_at": {"$gte": today},
+        })
+    return people
+
+
+@router.post("/delivery-people")
+async def create_delivery_person(data: DeliveryPersonIn, user=Depends(require_restaurant)):
+    doc = data.model_dump()
+    doc.update({"id": new_id(), "restaurant_id": rid(user), "created_at": now_iso()})
+    await db.delivery_people.insert_one(doc)
+    return clean(doc)
+
+
+@router.put("/delivery-people/{person_id}")
+async def update_delivery_person(person_id: str, data: DeliveryPersonIn, user=Depends(require_restaurant)):
+    updates = data.model_dump()
+    updates["updated_at"] = now_iso()
+    result = await db.delivery_people.update_one(
+        {"id": person_id, "restaurant_id": rid(user)}, {"$set": updates}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(404, "Entregador nao encontrado.")
+    return clean(await db.delivery_people.find_one({"id": person_id, "restaurant_id": rid(user)}, {"_id": 0}))
+
+
+@router.delete("/delivery-people/{person_id}")
+async def delete_delivery_person(person_id: str, user=Depends(require_restaurant)):
+    result = await db.delivery_people.delete_one({"id": person_id, "restaurant_id": rid(user)})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Entregador nao encontrado.")
+    return {"ok": True}

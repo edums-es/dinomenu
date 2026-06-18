@@ -65,6 +65,18 @@ function StatusBadge({ status }) {
 }
 
 // ── Order card (inside Kanban column) ─────────────────────────────────────
+function orderTypeLabel(order) {
+  if (order?.type === "dine_in") return `Mesa ${order.table_number || ""}`.trim();
+  if (order?.type === "delivery") return "Entrega";
+  return "Retirada";
+}
+
+function orderTypeIcon(order) {
+  if (order?.type === "delivery") return Bike;
+  if (order?.type === "dine_in") return ClipboardList;
+  return ShoppingBag;
+}
+
 function shortDateTime(iso) {
   if (!iso) return "-";
   try {
@@ -90,6 +102,7 @@ function OrderCard({ order, onSelect, onStatusChange }) {
   const col = COL_MAP[order.status] || {};
   const nexts = NEXT_STATUS[order.status] || [];
   const isPending = order.status === "pending";
+  const TypeIcon = orderTypeIcon(order);
 
   return (
     <div
@@ -122,13 +135,17 @@ function OrderCard({ order, onSelect, onStatusChange }) {
       {/* Type + total */}
       <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
         <span className="flex items-center gap-1">
-          {order.type === "delivery"
-            ? <><Bike className="w-3 h-3" /> Entrega</>
-            : <><ShoppingBag className="w-3 h-3" /> Retirada</>}
+          <TypeIcon className="w-3 h-3" /> {orderTypeLabel(order)}
           {" · "}{order.items?.length || 0} {order.items?.length === 1 ? "item" : "itens"}
         </span>
         <span className="font-display font-bold text-sm" style={{ color: col.color }}>{brl(order.total)}</span>
       </div>
+      {order.delivery_person?.name && (
+        <p className="mt-1 text-[11px] text-cyan-500 dark:text-cyan-300">
+          Entregador: {order.delivery_person.name}
+          {order.delivery_person.vehicle_plate ? ` (${order.delivery_person.vehicle_plate})` : ""}
+        </p>
+      )}
 
       {/* Quick actions */}
       {nexts.length > 0 && (
@@ -219,7 +236,7 @@ ${new Date(order.created_at).toLocaleString("pt-BR")}
 ────────────────────────────────
 Cliente: ${order.customer?.name}
 Tel:     ${order.customer?.phone || "—"}
-Tipo:    ${order.type === "delivery" ? "Entrega" : "Retirada"}
+Tipo:    ${orderTypeLabel(order)}
 ${order.address ? `End:     ${order.address.street}, ${order.address.number} - ${order.address.neighborhood}\n         ${order.address.complement || ""}` : ""}
 ────────────────────────────────
 ${itemsText}
@@ -345,10 +362,59 @@ ${order.customer_notes ? `Obs: ${order.customer_notes}` : ""}
 }
 
 // ── Main Orders page ───────────────────────────────────────────────────────
+function DeliveryAssignmentModal({ prompt, deliveryPeople, onClose, onConfirm }) {
+  const [deliveryPersonId, setDeliveryPersonId] = useState(prompt?.deliveryPersonId || "");
+  if (!prompt) return null;
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md dark:bg-[#1E2430] dark:border-gray-700">
+        <DialogHeader>
+          <DialogTitle className="font-display flex items-center gap-2">
+            <Bike className="w-5 h-5 text-cyan-500" />
+            Definir entregador
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Escolha o motoboy/entregador responsavel por esse pedido, ou continue sem vincular.
+          </p>
+          <select
+            value={deliveryPersonId}
+            onChange={(e) => setDeliveryPersonId(e.target.value)}
+            className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white text-sm outline-none"
+          >
+            <option value="">Sem entregador definido</option>
+            {deliveryPeople.map((person) => (
+              <option key={person.id} value={person.id}>
+                {person.name}
+                {person.vehicle_plate ? ` - ${person.vehicle_plate}` : ""}
+              </option>
+            ))}
+          </select>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1 dark:border-gray-700 dark:text-gray-300" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button
+              className="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white"
+              onClick={() => onConfirm(deliveryPersonId)}
+            >
+              Confirmar entrega
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Orders() {
   const [orders, setOrders] = useState([]);
   const [summary, setSummary] = useState(null);
   const [cycles, setCycles] = useState([]);
+  const [deliveryPeople, setDeliveryPeople] = useState([]);
+  const [deliveryPrompt, setDeliveryPrompt] = useState(null);
   const [loading, setLoading] = useState(true);
   const [cycleLoading, setCycleLoading] = useState(false);
   const [selected, setSelected] = useState(null);
@@ -377,15 +443,17 @@ export default function Orders() {
     if (!silent) setLoading(true);
     try {
       const params = buildQueryParams({ cycleMode, statusFilter, sourceFilter, paymentFilter, dateFrom, dateTo });
-      const [ordersRes, summaryRes, cyclesRes] = await Promise.all([
+      const [ordersRes, summaryRes, cyclesRes, deliveryRes] = await Promise.all([
         api.get("/admin/orders", { params }),
         api.get("/admin/orders/summary", { params }),
         api.get("/admin/order-cycles"),
+        api.get("/admin/delivery-people", { params: { active_only: true } }),
       ]);
       const data = ordersRes.data || [];
       setOrders(data);
       setSummary(summaryRes.data || null);
       setCycles(cyclesRes.data || []);
+      setDeliveryPeople(deliveryRes.data || []);
 
       // Novo pedido — exclui os que estao aguardando Pix (ainda nao foram pagos)
       const pendingNow = data.filter(
@@ -437,11 +505,29 @@ export default function Orders() {
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", onVisible); };
   }, [load]);
 
-  const updateStatus = async (id, status) => {
-    await api.put(`/admin/orders/${id}/status`, { status });
+  const updateStatus = async (id, status, extra = {}) => {
+    await api.put(`/admin/orders/${id}/status`, { status, ...extra });
     toast.success(`Pedido → ${STATUS_LABEL[status]}`);
     load(true);
     if (selected?.id === id) setSelected((s) => s && { ...s, status });
+  };
+
+  const requestStatusChange = async (id, status) => {
+    if (status === "out_for_delivery" && deliveryPeople.length > 0) {
+      setDeliveryPrompt({ orderId: id, status, deliveryPersonId: "" });
+      return;
+    }
+    await updateStatus(id, status);
+  };
+
+  const confirmDeliveryAssignment = async (deliveryPersonId) => {
+    if (!deliveryPrompt) return;
+    await updateStatus(
+      deliveryPrompt.orderId,
+      deliveryPrompt.status,
+      deliveryPersonId ? { delivery_person_id: deliveryPersonId } : {}
+    );
+    setDeliveryPrompt(null);
   };
 
   const queuePrint = async (id) => {
@@ -587,6 +673,7 @@ export default function Orders() {
             className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white text-sm outline-none">
             <option value="">Todos canais</option>
             <option value="online">Cardapio online</option>
+            <option value="table_qr">Mesa / QR Code</option>
             <option value="pdv">PDV</option>
             <option value="whatsapp">WhatsApp</option>
           </select>
@@ -670,7 +757,7 @@ export default function Orders() {
               col={col}
               orders={byStatus[col.key] || []}
               onSelect={setSelected}
-              onStatusChange={updateStatus}
+              onStatusChange={requestStatusChange}
               collapsed={!!collapsed[col.key]}
               onToggle={() => toggleCollapse(col.key)}
             />
@@ -691,7 +778,7 @@ export default function Orders() {
                 </div>
                 <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
                   {items.map((o) => (
-                    <OrderCard key={o.id} order={o} onSelect={setSelected} onStatusChange={updateStatus} />
+                    <OrderCard key={o.id} order={o} onSelect={setSelected} onStatusChange={requestStatusChange} />
                   ))}
                 </div>
               </div>
@@ -703,8 +790,14 @@ export default function Orders() {
       <OrderModal
         order={selected}
         onClose={() => setSelected(null)}
-        onStatusChange={updateStatus}
+        onStatusChange={requestStatusChange}
         onQueuePrint={queuePrint}
+      />
+      <DeliveryAssignmentModal
+        prompt={deliveryPrompt}
+        deliveryPeople={deliveryPeople}
+        onClose={() => setDeliveryPrompt(null)}
+        onConfirm={confirmDeliveryAssignment}
       />
     </div>
   );

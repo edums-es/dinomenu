@@ -27,6 +27,8 @@ import Customers from "@/pages/admin/Customers";
 import PDV from "@/pages/admin/PDV";
 import Suppliers from "@/pages/admin/Suppliers";
 import Tables from "@/pages/admin/Tables";
+import Waiters from "@/pages/admin/Waiters";
+import DeliveryPeople from "@/pages/admin/DeliveryPeople";
 import SuperLayout from "@/components/super/SuperLayout";
 import SuperDashboard from "@/pages/super/SuperDashboard";
 import Restaurants from "@/pages/super/Restaurants";
@@ -74,6 +76,8 @@ function App() {
               <Route path="estoque" element={<Stock />} />
               <Route path="fornecedores" element={<Suppliers />} />
               <Route path="mesas" element={<Tables />} />
+              <Route path="garcons" element={<Waiters />} />
+              <Route path="entregadores" element={<DeliveryPeople />} />
               <Route path="clientes" element={<Customers />} />
               <Route path="fidelidade" element={<Loyalty />} />
               <Route path="atacado" element={<Wholesale />} />

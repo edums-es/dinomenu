@@ -15,12 +15,13 @@ const STATUS_LABELS = {
   reserved: "Reservada",
 };
 
-function TableModal({ table, onClose, onSaved }) {
+function TableModal({ table, waiters = [], onClose, onSaved }) {
   const isEdit = !!table?.id;
   const [form, setForm] = useState({
     number: table?.number || "",
     name: table?.name || "",
     capacity: table?.capacity || 4,
+    waiter_id: table?.waiter_id || "",
   });
   const [loading, setLoading] = useState(false);
 
@@ -30,10 +31,10 @@ function TableModal({ table, onClose, onSaved }) {
     setLoading(true);
     try {
       if (isEdit) {
-        await api.put(`/api/admin/tables/${table.id}`, form);
+        await api.put(`/admin/tables/${table.id}`, { ...form, waiter_id: form.waiter_id || null });
         toast.success("Mesa atualizada!");
       } else {
-        await api.post("/api/admin/tables", form);
+        await api.post("/admin/tables", { ...form, waiter_id: form.waiter_id || null });
         toast.success("Mesa criada!");
       }
       onSaved();
@@ -67,6 +68,19 @@ function TableModal({ table, onClose, onSaved }) {
               placeholder="Ex: 01, A1, VIP-1"
               autoFocus
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Garçom responsável
+            </label>
+            <select
+              value={form.waiter_id}
+              onChange={(e) => setForm((f) => ({ ...f, waiter_id: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">Sem garçom fixo</option>
+              {waiters.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -111,14 +125,14 @@ function QrModal({ table, onClose }) {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    api.get(`/api/admin/tables/${table.id}/qr-data`)
+    api.get(`/admin/tables/${table.id}/qr-data`)
       .then((r) => setQrData(r.data))
       .catch(() => {
-        const fallbackUrl = `${window.location.origin}/mesa/${table.id}`;
+        const fallbackUrl = `${window.location.origin}/cardapio/${table.restaurant_slug || ""}?mesa=${table.number}`;
         setQrData({ url: fallbackUrl, table_number: table.number, table_name: table.name });
       })
       .finally(() => setLoading(false));
-  }, [table.id, table.number, table.name]);
+  }, [table.id, table.number, table.name, table.restaurant_slug]);
 
   const handleCopy = async () => {
     try {
@@ -146,23 +160,14 @@ function QrModal({ table, onClose }) {
             <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>
           ) : (
             <>
-              {/* QR visual placeholder */}
               <div className="bg-white border-4 border-gray-900 dark:border-gray-100 rounded-xl p-6 flex flex-col items-center gap-3">
-                <div className="grid grid-cols-7 gap-0.5">
-                  {Array.from({ length: 49 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className={`w-3 h-3 rounded-sm ${
-                        [0,1,2,3,4,5,6,7,13,14,20,21,27,28,34,35,41,42,43,44,45,46,47,48,8,15,22,29,36,10,17,24,31,38,11,18,25,32,39].includes(i)
-                          ? "bg-gray-900"
-                          : "bg-white"
-                      }`}
-                    />
-                  ))}
-                </div>
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(qrData?.url || "")}`}
+                  alt={`QR Code Mesa ${table.number}`}
+                  className="w-64 h-64"
+                />
                 <p className="text-xs text-gray-500 text-center mt-2">
-                  Gere o QR Code real com o link abaixo usando um gerador online como<br />
-                  <a href="https://qr.io" target="_blank" rel="noreferrer" className="text-indigo-600 underline">qr.io</a> ou <a href="https://qrcode-monkey.com" target="_blank" rel="noreferrer" className="text-indigo-600 underline">qrcode-monkey.com</a>
+                  QR Code pronto para imprimir e colar na mesa.
                 </p>
               </div>
 
@@ -186,7 +191,7 @@ function QrModal({ table, onClose }) {
 
               <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
                 <p className="text-xs text-amber-700 dark:text-amber-400">
-                  <strong>Como usar:</strong> Acesse um gerador de QR code online, cole o link acima, gere e imprima o QR. Coloque na mesa para que os clientes escaneiem e façam pedidos.
+                  <strong>Como usar:</strong> Imprima este QR Code e coloque na mesa. Ao escanear, o cliente abre o cardapio ja vinculado a mesa.
                 </p>
               </div>
             </>
@@ -199,14 +204,19 @@ function QrModal({ table, onClose }) {
 
 export default function Tables() {
   const [tables, setTables] = useState([]);
+  const [waiters, setWaiters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [qrModal, setQrModal] = useState(null);
 
   const fetchTables = useCallback(async () => {
     try {
-      const res = await api.get("/api/admin/tables");
-      setTables(res.data || []);
+      const [tablesRes, waitersRes] = await Promise.all([
+        api.get("/admin/tables"),
+        api.get("/admin/waiters", { params: { active_only: true } }),
+      ]);
+      setTables(tablesRes.data || []);
+      setWaiters(waitersRes.data || []);
     } catch { toast.error("Erro ao carregar mesas"); }
     finally { setLoading(false); }
   }, []);
@@ -216,7 +226,7 @@ export default function Tables() {
   const handleDelete = async (t) => {
     if (!window.confirm(`Excluir a mesa ${t.number}?`)) return;
     try {
-      await api.delete(`/api/admin/tables/${t.id}`);
+      await api.delete(`/admin/tables/${t.id}`);
       toast.success("Mesa excluída");
       fetchTables();
     } catch (err) {
@@ -262,6 +272,11 @@ export default function Tables() {
                   <div className="flex items-center gap-1 mt-1 text-gray-500 dark:text-gray-400 text-sm">
                     <Users size={13} /> {t.capacity} pessoa{t.capacity !== 1 ? "s" : ""}
                   </div>
+                  {t.waiter?.name && (
+                    <p className="text-xs text-indigo-500 dark:text-indigo-300 mt-1">
+                      Garçom: {t.waiter.name}
+                    </p>
+                  )}
                 </div>
                 <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[t.status] || STATUS_COLORS.available}`}>
                   {STATUS_LABELS[t.status] || "Disponível"}
@@ -293,7 +308,7 @@ export default function Tables() {
         </div>
       )}
 
-      {modal && <TableModal table={modal} onClose={() => setModal(null)} onSaved={fetchTables} />}
+      {modal && <TableModal table={modal} waiters={waiters} onClose={() => setModal(null)} onSaved={fetchTables} />}
       {qrModal && <QrModal table={qrModal} onClose={() => setQrModal(null)} />}
     </div>
   );

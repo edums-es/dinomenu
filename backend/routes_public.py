@@ -625,7 +625,11 @@ async def _notify_new_order(restaurant: dict, order: dict, order_in=None, pix_vi
             customer_name = cust.get("name", "")
             customer_phone = cust.get("phone", "")
 
-        delivery_type = "Entrega" if order_type == "delivery" else "Retirada"
+        if order_type == "dine_in":
+            table_number = getattr(order_in, "table_number", None) if order_in else order.get("table_number")
+            delivery_type = f"Mesa {table_number}" if table_number else "Mesa"
+        else:
+            delivery_type = "Entrega" if order_type == "delivery" else "Retirada"
         pm_lower = pm.lower()
         if "pix" in pm_lower:
             payment_label = "Pix pago automatico Openpix" if pix_via_openpix else "Pix aguardando comprovante"
@@ -695,6 +699,15 @@ async def create_order(slug: str, order: OrderIn):
         raise HTTPException(status_code=400, detail="Loja fechada no momento")
     if order.type == "pickup" and r.get("accepts_pickup") is False:
         raise HTTPException(status_code=400, detail="Restaurante nao aceita retirada")
+    table = None
+    if order.type == "dine_in":
+        if not order.table_number:
+            raise HTTPException(status_code=400, detail="Mesa nao informada")
+        table = await db.tables.find_one(
+            {"restaurant_id": r["id"], "number": order.table_number}, {"_id": 0}
+        )
+        if not table:
+            raise HTTPException(status_code=404, detail="Mesa nao encontrada")
 
     calculated = await calculate_order(db, r, order.items, order.coupon_code)
     if calculated["subtotal"] < money(r.get("minimum_order")):
@@ -725,15 +738,27 @@ async def create_order(slug: str, order: OrderIn):
         "order_number": order_number,
         "status": "pending",
         "payment_status": "pending",
+        "source": "table_qr" if order.type == "dine_in" else "online",
         "created_at": now_iso(),
         "updated_at": now_iso(),
     })
+    if table:
+        doc["table_id"] = table["id"]
+        doc["table_number"] = table["number"]
+        doc["table_name"] = table.get("name") or f"Mesa {table['number']}"
+        if table.get("waiter_id"):
+            doc["waiter_id"] = table.get("waiter_id")
     reserved = await reserve_stock(db, r["id"], calculated["reservations"])
     try:
         await db.orders.insert_one(doc)
     except Exception:
         await release_stock(db, r["id"], reserved)
         raise
+    if table:
+        await db.tables.update_one(
+            {"id": table["id"], "restaurant_id": r["id"]},
+            {"$set": {"status": "occupied", "updated_at": now_iso()}},
+        )
 
     import asyncio
 

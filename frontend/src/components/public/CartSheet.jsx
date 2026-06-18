@@ -34,6 +34,13 @@ const maskCep = (value) => {
 };
 export default function CartSheet({ open, onOpenChange, restaurant, slug, products = [] }) {
   const { items, addItem, updateQuantity, removeItem, subtotal, clearCart } = useCart();
+  const tableNumber = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    const value = new URLSearchParams(window.location.search).get("mesa");
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }, []);
+  const isTableOrder = !!tableNumber;
   const [step, setStep] = useState("cart"); // cart | checkout | pix
   const [submitting, setSubmitting] = useState(false);
   const [pixCharge, setPixCharge] = useState(null);
@@ -51,7 +58,7 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug, produc
   // checkout fields
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [type, setType] = useState(restaurant?.accepts_delivery ? "delivery" : "pickup");
+  const [type, setType] = useState(isTableOrder ? "dine_in" : restaurant?.accepts_delivery ? "delivery" : "pickup");
   const [cep, setCep] = useState("");
   const [street, setStreet] = useState("");
   const [number, setNumber] = useState("");
@@ -63,7 +70,7 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug, produc
   const [orderNotes, setOrderNotes] = useState("");
 
   const deliveryFee = useMemo(() => {
-    if (type === "pickup") return 0;
+    if (type !== "delivery") return 0;
     if (coupon?.free_delivery) return 0;
     return Number(restaurant?.flat_delivery_fee) || 0;
   }, [type, coupon, restaurant?.flat_delivery_fee]);
@@ -157,6 +164,12 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug, produc
     return () => { cancelled = true; };
   }, [cep, type]);
 
+  useEffect(() => {
+    if (isTableOrder && type !== "dine_in") {
+      setType("dine_in");
+    }
+  }, [isTableOrder, type]);
+
   const applyCoupon = async () => {
     if (!couponInput.trim()) return;
     try {
@@ -173,6 +186,7 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug, produc
 
   const buildOrderPayload = () => ({
     type,
+    table_number: isTableOrder ? tableNumber : null,
     customer: { name, phone },
     address: type === "delivery"
       ? { cep, street, number, neighborhood, complement, reference }
@@ -214,7 +228,7 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug, produc
     lines.push("");
     lines.push(`*Cliente:* ${name}`);
     lines.push(`*Telefone:* ${phone}`);
-    lines.push(`*Tipo:* ${type === "delivery" ? "Entrega" : "Retirada"}`);
+    lines.push(`*Tipo:* ${type === "dine_in" ? `Mesa ${tableNumber}` : type === "delivery" ? "Entrega" : "Retirada"}`);
     if (type === "delivery") {
       lines.push(`*Endereço:* ${street}, ${number} - ${neighborhood}`);
       if (complement) lines.push(`*Complemento:* ${complement}`);
@@ -521,16 +535,26 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug, produc
           </div>
         ) : (
           <div className="p-4 space-y-4">
-            <div className="grid grid-cols-2 gap-2">
-              {restaurant?.accepts_delivery && (
-                <button onClick={() => setType("delivery")} data-testid="type-delivery"
-                  className={`py-2.5 rounded-xl border text-sm font-medium transition-colors ${type === "delivery" ? "brand-bg border-transparent" : "border-white/20 text-gray-300 hover:border-white/40"}`}>Entrega</button>
-              )}
-              {restaurant?.accepts_pickup && (
-                <button onClick={() => setType("pickup")} data-testid="type-pickup"
-                  className={`py-2.5 rounded-xl border text-sm font-medium transition-colors ${type === "pickup" ? "brand-bg border-transparent" : "border-white/20 text-gray-300 hover:border-white/40"}`}>Retirada</button>
-              )}
-            </div>
+            {isTableOrder ? (
+              <div className="rounded-xl border border-white/10 p-3 text-sm" style={{background:"var(--brand-secondary)", color:"var(--brand-primary)"}}>
+                <div className="flex items-center gap-2 font-semibold">
+                  <QrCode className="w-4 h-4" />
+                  Pedido da Mesa {tableNumber}
+                </div>
+                <p className="mt-1 text-xs text-gray-300">Esse pedido sera enviado para atendimento no salao.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {restaurant?.accepts_delivery && (
+                  <button onClick={() => setType("delivery")} data-testid="type-delivery"
+                    className={`py-2.5 rounded-xl border text-sm font-medium transition-colors ${type === "delivery" ? "brand-bg border-transparent" : "border-white/20 text-gray-300 hover:border-white/40"}`}>Entrega</button>
+                )}
+                {restaurant?.accepts_pickup && (
+                  <button onClick={() => setType("pickup")} data-testid="type-pickup"
+                    className={`py-2.5 rounded-xl border text-sm font-medium transition-colors ${type === "pickup" ? "brand-bg border-transparent" : "border-white/20 text-gray-300 hover:border-white/40"}`}>Retirada</button>
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Nome</Label><Input value={name} onChange={(e) => setName(e.target.value)} data-testid="checkout-name" className="mt-1" /></div>

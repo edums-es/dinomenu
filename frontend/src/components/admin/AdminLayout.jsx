@@ -21,6 +21,8 @@ const NAV_GROUPS = [
       { to: "/supermaster/pdv",      label: "PDV / Caixa",  icon: ShoppingCart },
       { to: "/supermaster/pedidos",  label: "Pedidos",      icon: ClipboardList },
       { to: "/supermaster/mesas",    label: "Mesas / QR",   icon: QrCode },
+      { to: "/supermaster/garcons",  label: "Garcons",      icon: Users },
+      { to: "/supermaster/entregadores", label: "Entregadores", icon: Truck },
     ],
   },
   {

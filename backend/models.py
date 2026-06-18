@@ -183,7 +183,7 @@ class AddressInfo(BaseModel):
 
 
 class OrderIn(BaseModel):
-    type: Literal["delivery", "pickup"] = "delivery"
+    type: Literal["delivery", "pickup", "dine_in"] = "delivery"
     customer: CustomerInfo
     address: Optional[AddressInfo] = None
     items: List[OrderItemIn]
@@ -207,6 +207,7 @@ ORDER_STATUSES = [
 
 class StatusUpdate(BaseModel):
     status: str
+    delivery_person_id: Optional[str] = None
 
 
 DEFAULT_OPENING_HOURS = {
