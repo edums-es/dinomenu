@@ -4,7 +4,7 @@ from pydantic import BaseModel, EmailStr
 
 from db import db
 from auth import require_roles, hash_password
-from models import slugify, clean, now_iso
+from models import AddonGroupIn, slugify, clean, new_id, now_iso
 from datetime import datetime, timezone
 
 router = APIRouter(prefix="/api/super", tags=["super"])
@@ -24,6 +24,25 @@ class UpdateRestaurant(BaseModel):
     status: str = None
     plan: str = None
     name: str = None
+
+
+class SyncAddonGroups(BaseModel):
+    groups: list[AddonGroupIn]
+
+
+async def validate_restaurant_product_ids(rid: str, product_ids: list[str]) -> list[str]:
+    clean_ids = [pid for pid in dict.fromkeys(product_ids or []) if pid]
+    if not clean_ids:
+        return []
+    products = await db.products.find(
+        {"restaurant_id": rid, "id": {"$in": clean_ids}},
+        {"id": 1, "_id": 0},
+    ).to_list(len(clean_ids))
+    found = {product["id"] for product in products}
+    missing = [pid for pid in clean_ids if pid not in found]
+    if missing:
+        raise HTTPException(400, f"Produtos invalidos para adicionais: {', '.join(missing)}")
+    return clean_ids
 
 
 @router.get("/restaurants")
@@ -133,6 +152,35 @@ async def toggle_restaurant_status(rid: str, user=Depends(SUPER)):
     new_status = "suspended" if r.get("status") == "active" else "active"
     await db.restaurants.update_one({"id": rid}, {"$set": {"status": new_status, "updated_at": now_iso()}})
     return {"status": new_status}
+
+
+@router.put("/restaurants/{rid}/addon-groups/sync")
+async def sync_restaurant_addon_groups(rid: str, data: SyncAddonGroups, user=Depends(SUPER)):
+    restaurant = await db.restaurants.find_one({"id": rid}, {"id": 1, "_id": 0})
+    if not restaurant:
+        raise HTTPException(404, "Restaurante nao encontrado")
+
+    synced = []
+    for group in data.groups:
+        doc = group.model_dump()
+        doc["product_ids"] = await validate_restaurant_product_ids(rid, doc.get("product_ids") or [])
+        doc["restaurant_id"] = rid
+        doc["updated_at"] = now_iso()
+        existing = await db.addon_groups.find_one({"restaurant_id": rid, "name": doc["name"]}, {"_id": 0})
+        if existing:
+            doc["id"] = existing["id"]
+            await db.addon_groups.update_one(
+                {"id": existing["id"], "restaurant_id": rid},
+                {"$set": doc},
+            )
+            synced.append({"id": existing["id"], "name": doc["name"], "action": "updated"})
+        else:
+            doc["id"] = new_id()
+            doc["created_at"] = now_iso()
+            await db.addon_groups.insert_one(doc)
+            synced.append({"id": doc["id"], "name": doc["name"], "action": "created"})
+
+    return {"ok": True, "synced": synced}
 
 @router.get("/restaurants/{rid}/orders")
 async def restaurant_orders(rid: str, user=Depends(SUPER)):
