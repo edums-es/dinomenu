@@ -34,6 +34,14 @@ router = APIRouter(prefix="/api/public", tags=["public"])
 logger = logging.getLogger(__name__)
 
 
+def table_number_values(value):
+    text = str(value).strip()
+    values = [text]
+    if text.isdigit():
+        values.append(int(text))
+    return values
+
+
 WHITE_LABEL_DEFAULTS = {
     "name": "Dino Menu",
     "short_name": "Dino Menu",
@@ -704,7 +712,7 @@ async def create_order(slug: str, order: OrderIn):
         if not order.table_number:
             raise HTTPException(status_code=400, detail="Mesa nao informada")
         table = await db.tables.find_one(
-            {"restaurant_id": r["id"], "number": order.table_number}, {"_id": 0}
+            {"restaurant_id": r["id"], "number": {"$in": table_number_values(order.table_number)}}, {"_id": 0}
         )
         if not table:
             raise HTTPException(status_code=404, detail="Mesa nao encontrada")

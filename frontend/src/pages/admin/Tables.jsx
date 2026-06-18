@@ -17,6 +17,7 @@ const STATUS_LABELS = {
 
 function TableModal({ table, waiters = [], onClose, onSaved }) {
   const isEdit = !!table?.id;
+  const waiterOptions = Array.isArray(waiters) ? waiters : [];
   const [form, setForm] = useState({
     number: table?.number || "",
     name: table?.name || "",
@@ -30,11 +31,16 @@ function TableModal({ table, waiters = [], onClose, onSaved }) {
     if (!form.number) { toast.error("Número da mesa obrigatório"); return; }
     setLoading(true);
     try {
+      const payload = {
+        ...form,
+        number: String(form.number).trim(),
+        waiter_id: form.waiter_id || null,
+      };
       if (isEdit) {
-        await api.put(`/admin/tables/${table.id}`, { ...form, waiter_id: form.waiter_id || null });
+        await api.put(`/admin/tables/${table.id}`, payload);
         toast.success("Mesa atualizada!");
       } else {
-        await api.post("/admin/tables", { ...form, waiter_id: form.waiter_id || null });
+        await api.post("/admin/tables", payload);
         toast.success("Mesa criada!");
       }
       onSaved();
@@ -47,8 +53,8 @@ function TableModal({ table, waiters = [], onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md">
+    <div className="fixed inset-0 bg-black/70 flex items-start sm:items-center justify-center z-[9999] p-4 overflow-y-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md my-10">
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             {isEdit ? "Editar Mesa" : "Nova Mesa"}
@@ -79,7 +85,7 @@ function TableModal({ table, waiters = [], onClose, onSaved }) {
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="">Sem garçom fixo</option>
-              {waiters.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              {waiterOptions.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
           </div>
           <div>
@@ -146,8 +152,8 @@ function QrModal({ table, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md">
+    <div className="fixed inset-0 bg-black/70 flex items-start sm:items-center justify-center z-[9999] p-4 overflow-y-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md my-10">
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
             <QrCode size={20} className="text-indigo-600" />
@@ -210,15 +216,22 @@ export default function Tables() {
   const [qrModal, setQrModal] = useState(null);
 
   const fetchTables = useCallback(async () => {
+    setLoading(true);
     try {
-      const [tablesRes, waitersRes] = await Promise.all([
-        api.get("/admin/tables"),
-        api.get("/admin/waiters", { params: { active_only: true } }),
-      ]);
-      setTables(tablesRes.data || []);
-      setWaiters(waitersRes.data || []);
-    } catch { toast.error("Erro ao carregar mesas"); }
-    finally { setLoading(false); }
+      const tablesRes = await api.get("/admin/tables");
+      setTables(Array.isArray(tablesRes.data) ? tablesRes.data : []);
+    } catch {
+      setTables([]);
+      toast.error("Erro ao carregar mesas");
+    }
+    try {
+      const waitersRes = await api.get("/admin/waiters", { params: { active_only: true } });
+      setWaiters(Array.isArray(waitersRes.data) ? waitersRes.data : []);
+    } catch {
+      setWaiters([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { fetchTables(); }, [fetchTables]);

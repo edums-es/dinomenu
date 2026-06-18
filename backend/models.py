@@ -196,7 +196,7 @@ class OrderIn(BaseModel):
     change_for: Optional[float] = None
     customer_notes: Optional[str] = ""
     scheduled_for: Optional[str] = None   # ISO datetime string for scheduled orders
-    table_number: Optional[int] = None    # mesa (dine-in / QR code)
+    table_number: Optional[str] = None    # mesa (dine-in / QR code)
 
 
 ORDER_STATUSES = [

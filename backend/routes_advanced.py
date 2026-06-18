@@ -17,6 +17,14 @@ def rid(user):
     return user["restaurant_id"]
 
 
+def table_number_values(value):
+    text = str(value).strip()
+    values = [text]
+    if text.isdigit():
+        values.append(int(text))
+    return values
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # 1. CONTROLE DE CAIXA
 # ═══════════════════════════════════════════════════════════════════════════
@@ -370,7 +378,7 @@ async def supplier_purchases(supplier_id: str, user=Depends(require_restaurant))
 # ═══════════════════════════════════════════════════════════════════════════
 
 class TableIn(BaseModel):
-    number: int
+    number: str
     name: Optional[str] = ""
     capacity: int = 4
     waiter_id: Optional[str] = None
@@ -420,7 +428,8 @@ async def list_tables(user=Depends(require_restaurant)):
 
 @router.post("/tables")
 async def create_table(data: TableIn, user=Depends(require_restaurant)):
-    existing = await db.tables.find_one({"restaurant_id": rid(user), "number": data.number})
+    data.number = str(data.number).strip()
+    existing = await db.tables.find_one({"restaurant_id": rid(user), "number": {"$in": table_number_values(data.number)}})
     if existing:
         raise HTTPException(400, f"Mesa {data.number} já existe.")
     if data.waiter_id:
@@ -435,6 +444,7 @@ async def create_table(data: TableIn, user=Depends(require_restaurant)):
 
 @router.put("/tables/{table_id}")
 async def update_table(table_id: str, data: TableIn, user=Depends(require_restaurant)):
+    data.number = str(data.number).strip()
     existing = await db.tables.find_one({"id": table_id, "restaurant_id": rid(user)})
     if not existing:
         raise HTTPException(404, "Mesa não encontrada.")
@@ -481,12 +491,12 @@ async def table_qr_data(table_id: str, user=Depends(require_restaurant)):
 
 
 @public_router.get("/restaurants/{slug}/table/{table_number}")
-async def validate_table(slug: str, table_number: int):
+async def validate_table(slug: str, table_number: str):
     restaurant = await db.restaurants.find_one({"slug": slug}, {"_id": 0})
     if not restaurant:
         raise HTTPException(404, "Restaurante não encontrado.")
     table = await db.tables.find_one(
-        {"restaurant_id": restaurant["id"], "number": table_number}, {"_id": 0}
+        {"restaurant_id": restaurant["id"], "number": {"$in": table_number_values(table_number)}}, {"_id": 0}
     )
     if not table:
         raise HTTPException(404, "Mesa não encontrada.")

@@ -37,8 +37,7 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug, produc
   const tableNumber = useMemo(() => {
     if (typeof window === "undefined") return null;
     const value = new URLSearchParams(window.location.search).get("mesa");
-    const parsed = Number(value);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    return value?.trim() || null;
   }, []);
   const isTableOrder = !!tableNumber;
   const [step, setStep] = useState("cart"); // cart | checkout | pix
