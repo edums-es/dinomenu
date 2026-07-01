@@ -74,6 +74,14 @@ function resolveConfigPaths(userDataDir = null) {
   return [...new Set(candidates)];
 }
 
+function normalizeApiBase(value) {
+  const raw = String(value || "").trim().replace(/\/+$/, "");
+  if (!raw) return "http://localhost:8000/api";
+  return raw
+    .replace(/\/print-agent\/jobs\/claim$/i, "")
+    .replace(/\/print-agent\/jobs\/[^/]+\/complete$/i, "");
+}
+
 async function loadConfig(userDataDir = null) {
   const configPath = userDataDir ? path.join(userDataDir, "config.json") : null;
   for (const candidate of resolveConfigPaths(userDataDir)) {
@@ -154,7 +162,7 @@ class PrintService extends EventEmitter {
     const config = loaded.config || {};
     this.configPath = loaded.path;
     this.config = config;
-    this.api = process.env.EG_PRINT_API || config.api || config.endpoint || config.api_url || "http://localhost:8000/api";
+    this.api = normalizeApiBase(process.env.EG_PRINT_API || config.api || config.endpoint || config.api_url);
     this.token = process.env.EG_PRINT_TOKEN || config.token || config.store_token || config.printer_agent_token || config.chave || config.key || "";
     this.agentId = process.env.EG_PRINT_AGENT_ID || config.agent_id || config.agentId || `${os.hostname()}-eg-print-agent`;
     this.pollMs = Number(process.env.EG_PRINT_POLL_MS || config.poll_ms || 5000);
@@ -179,6 +187,7 @@ class PrintService extends EventEmitter {
       next.chave = next.token;
     }
     if (next.api) {
+      next.api = normalizeApiBase(next.api);
       next.endpoint = next.api;
       next.api_url = next.api;
     }

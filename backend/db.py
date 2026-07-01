@@ -69,15 +69,31 @@ def _sql_prefilter(query):
     if not isinstance(query, dict):
         return None
     filters = {}
+
+    def merge_filter(source):
+        for key, value in source.items():
+            existing = _get(filters, key, _MISSING)
+            if existing is not _MISSING and existing != value:
+                return False
+            if not _merge_nested(filters, key, value):
+                return False
+        return True
+
     for key, condition in query.items():
-        if key in {"$or", "$and"}:
+        if key == "$and":
+            for part in condition or []:
+                part_filter = _sql_prefilter(part)
+                if part_filter and not merge_filter(part_filter):
+                    return filters or None
+            continue
+        if key == "$or":
             continue
         if key == "_id":
             continue
         if isinstance(condition, dict):
             continue
-        if not _merge_nested(filters, key, condition):
-            return None
+        if not merge_filter({key: condition}):
+            return filters or None
     return filters or None
 
 

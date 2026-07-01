@@ -1,4 +1,4 @@
-from db import _aggregate, _apply_update, _matches, _project, _sort_documents
+from db import _aggregate, _apply_update, _matches, _project, _sort_documents, _sql_prefilter
 
 
 def test_matches_nested_fields_and_document_query_operators():
@@ -47,6 +47,22 @@ def test_projection_and_sort_preserve_route_contracts():
 
     assert projected == {"name": "B"}
     assert [document["_id"] for document in sorted_documents] == ["1", "2"]
+
+
+def test_sql_prefilter_extracts_tenant_filters_inside_and_queries():
+    query = {
+        "$and": [
+            {"restaurant_id": "restaurant-1"},
+            {"status": "pending"},
+            {"$or": [{"cycle_id": {"$exists": False}}, {"cycle_id": None}]},
+            {"created_at": {"$gte": "2026-01-01T00:00:00"}},
+        ]
+    }
+
+    assert _sql_prefilter(query) == {
+        "restaurant_id": "restaurant-1",
+        "status": "pending",
+    }
 
 
 def test_customer_aggregation_pipeline():
