@@ -4,6 +4,10 @@ const els = {
   statusHint: document.getElementById("statusHint"),
   lastOrder: document.getElementById("lastOrder"),
   printedCount: document.getElementById("printedCount"),
+  apiInput: document.getElementById("apiInput"),
+  tokenInput: document.getElementById("tokenInput"),
+  linkStore: document.getElementById("linkStore"),
+  linkFeedback: document.getElementById("linkFeedback"),
   printerSelect: document.getElementById("printerSelect"),
   refreshPrinters: document.getElementById("refreshPrinters"),
   testPrint: document.getElementById("testPrint"),
@@ -35,6 +39,8 @@ function renderState(state = {}) {
       : "Aguardando conexão com a loja.";
   els.lastOrder.textContent = state.lastOrder ? `#${state.lastOrder}` : "-";
   els.printedCount.textContent = String(state.printedCount || 0);
+  if (!els.apiInput.value && state.api) els.apiInput.value = state.api;
+  if (!els.tokenInput.value && state.token) els.tokenInput.value = state.token;
 
   els.errorBox.classList.toggle("hidden", !hasError);
   els.errorText.textContent = state.lastError || "";
@@ -70,6 +76,23 @@ els.refreshPrinters.addEventListener("click", async () => {
 
 els.printerSelect.addEventListener("change", async () => {
   await window.egPrint.setPrinter(els.printerSelect.value);
+});
+
+els.linkStore.addEventListener("click", async () => {
+  setBusy(els.linkStore, true);
+  els.linkFeedback.textContent = "Vinculando loja...";
+  try {
+    const state = await window.egPrint.linkStore({
+      api: els.apiInput.value,
+      token: els.tokenInput.value,
+    });
+    renderState(state);
+    els.linkFeedback.textContent = "Loja vinculada. Conexao reiniciada.";
+  } catch (error) {
+    els.linkFeedback.textContent = error?.message || "Nao foi possivel vincular a loja.";
+  } finally {
+    setBusy(els.linkStore, false);
+  }
 });
 
 els.testPrint.addEventListener("click", async () => {

@@ -123,6 +123,7 @@ class PrintService extends EventEmitter {
     this.busy = false;
     this.state = {
       api: "",
+      token: "",
       agentId: "",
       printerName: "",
       connected: false,
@@ -156,6 +157,7 @@ class PrintService extends EventEmitter {
     this.printerName = process.env.EG_PRINTER_NAME || config.printer_name || "";
     this.setState({
       api: this.api,
+      token: this.token,
       agentId: this.agentId,
       printerName: this.printerName || "Impressora padrao do Windows",
       status: this.token ? "Aguardando pedidos" : "Precisa vincular a loja",

@@ -26,9 +26,9 @@ function createWindow() {
 
   mainWindow = new BrowserWindow({
     width: 460,
-    height: 610,
+    height: 720,
     minWidth: 420,
-    minHeight: 560,
+    minHeight: 680,
     show: false,
     title: "Dino Menu Impressora",
     backgroundColor: "#050807",
@@ -135,6 +135,16 @@ ipcMain.handle("restart-service", async () => {
 ipcMain.handle("list-printers", () => service.getPrinters());
 ipcMain.handle("set-printer", async (_event, printerName) => {
   await service.saveConfig({ printer_name: printerName || "" });
+  await service.restart();
+  return service.snapshot();
+});
+ipcMain.handle("link-store", async (_event, settings = {}) => {
+  const api = String(settings.api || "").trim().replace(/\/+$/, "");
+  const token = String(settings.token || "").trim();
+  if (!api || !token) {
+    throw new Error("Informe a URL/API e o token da loja");
+  }
+  await service.saveConfig({ api, token });
   await service.restart();
   return service.snapshot();
 });

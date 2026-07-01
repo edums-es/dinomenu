@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld("egPrint", {
   restart: () => ipcRenderer.invoke("restart-service"),
   listPrinters: () => ipcRenderer.invoke("list-printers"),
   setPrinter: (printerName) => ipcRenderer.invoke("set-printer", printerName),
+  linkStore: (settings) => ipcRenderer.invoke("link-store", settings),
   openLogs: () => ipcRenderer.invoke("open-logs"),
   hideWindow: () => ipcRenderer.invoke("hide-window"),
   onState: (callback) => {

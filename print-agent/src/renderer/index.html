@@ -37,6 +37,27 @@
       </section>
 
       <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Vincular loja</h2>
+            <p class="muted">Cole os dados exibidos no painel de impressao da loja.</p>
+          </div>
+        </div>
+        <div class="link-grid">
+          <div>
+            <label for="apiInput">URL/API do painel</label>
+            <input id="apiInput" type="url" placeholder="https://seu-dominio.com/api" autocomplete="off" />
+          </div>
+          <div>
+            <label for="tokenInput">Token/chave da loja</label>
+            <input id="tokenInput" type="password" placeholder="Cole o token da loja" autocomplete="off" />
+          </div>
+        </div>
+        <button id="linkStore" class="secondary full-width">Vincular loja</button>
+        <p id="linkFeedback" class="muted feedback"></p>
+      </section>
+
+      <section class="panel">
         <label for="printerSelect">Impressora</label>
         <div class="printer-row">
           <select id="printerSelect">
