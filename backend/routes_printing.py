@@ -277,10 +277,17 @@ async def download_print_agent(request: Request, user=Depends(require_restaurant
 
     config = {
         "api": api_url,
+        "endpoint": api_url,
+        "api_url": api_url,
         "token": settings["printer_agent_token"],
+        "store_token": settings["printer_agent_token"],
+        "printer_agent_token": settings["printer_agent_token"],
+        "chave": settings["printer_agent_token"],
+        "key": settings["printer_agent_token"],
         "printer_name": printer_name,
         "poll_ms": 5000,
         "agent_id": f"{restaurant.get('slug') or restaurant.get('id')}-print-agent",
+        "agentId": f"{restaurant.get('slug') or restaurant.get('id')}-print-agent",
     }
 
     if not setup_exe:
@@ -300,17 +307,44 @@ if not exist "%CONFIG_FILE%" (
   exit /b 1
 )
 
+taskkill /IM "Dino Menu Impressora.exe" /F >nul 2>nul
+taskkill /IM "EG Delivery.exe" /F >nul 2>nul
+taskkill /IM "eg-delivery-print-agent.exe" /F >nul 2>nul
+
 for %%D in (
   "%APPDATA%\\Dino Menu Impressora"
+  "%APPDATA%\\DinoMenu Impressora"
   "%APPDATA%\\EG Delivery"
+  "%APPDATA%\\EG Delivery Printer"
   "%APPDATA%\\EG Delivery Impressora"
+  "%APPDATA%\\EG Delivery Impressora Automatica"
   "%APPDATA%\\eg-delivery-print-agent"
+  "%APPDATA%\\egdelivery-print-agent"
+  "%LOCALAPPDATA%\\Dino Menu Impressora"
+  "%LOCALAPPDATA%\\DinoMenu Impressora"
+  "%LOCALAPPDATA%\\EG Delivery"
+  "%LOCALAPPDATA%\\EG Delivery Printer"
+  "%LOCALAPPDATA%\\EG Delivery Impressora"
+  "%LOCALAPPDATA%\\EG Delivery Impressora Automatica"
+  "%LOCALAPPDATA%\\eg-delivery-print-agent"
+  "%LOCALAPPDATA%\\egdelivery-print-agent"
 ) do (
   mkdir "%%~D" >nul 2>nul
   copy /Y "%CONFIG_FILE%" "%%~D\\config.json" >nul
+  copy /Y "%CONFIG_FILE%" "%%~D\\config.egdelivery.json" >nul
 )
 
 start "" /wait "%~dp0Dino Menu Impressora Setup.exe"
+
+for %%E in (
+  "%LOCALAPPDATA%\\Programs\\Dino Menu Impressora\\Dino Menu Impressora.exe"
+  "%LOCALAPPDATA%\\Programs\\EG Delivery\\EG Delivery.exe"
+  "%LOCALAPPDATA%\\Dino Menu Impressora\\Dino Menu Impressora.exe"
+  "%LOCALAPPDATA%\\EG Delivery\\EG Delivery.exe"
+) do (
+  if exist "%%~E" start "" "%%~E"
+)
+
 echo.
 echo Dino Menu Impressora instalado e vinculado a esta loja.
 pause
@@ -321,12 +355,13 @@ pause
         z.write(setup_exe, "Dino Menu Impressora Setup.exe", compress_type=zipfile.ZIP_STORED)
         z.writestr("config.egdelivery.json", json.dumps(config, indent=2, ensure_ascii=False))
         z.writestr("config.json", json.dumps(config, indent=2, ensure_ascii=False))
+        z.writestr("1-CLIQUE-AQUI-PARA-INSTALAR-E-VINCULAR.bat", install_bat)
         z.writestr("1-INSTALAR-E-VINCULAR-IMPRESSORA.bat", install_bat)
         z.writestr("Instalar Dino Menu Impressora.bat", install_bat)
         z.writestr("LEIA-ME-PRIMEIRO.txt", (
             "Dino Menu - Instalador da Impressora\n\n"
             "1. Extraia este ZIP no computador da loja conectado a impressora.\n"
-            "2. De dois cliques em: 1-INSTALAR-E-VINCULAR-IMPRESSORA.bat\n"
+            "2. De dois cliques em: 1-CLIQUE-AQUI-PARA-INSTALAR-E-VINCULAR.bat\n"
             "3. Confirme a instalacao do programa.\n"
             "4. Pronto. O icone do Dino Menu ficara perto do relogio do Windows.\n\n"
             "Nao execute apenas o .exe, pois ele instala o app sem vincular a loja.\n\n"

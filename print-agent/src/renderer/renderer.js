@@ -8,6 +8,7 @@ const els = {
   tokenInput: document.getElementById("tokenInput"),
   linkStore: document.getElementById("linkStore"),
   linkFeedback: document.getElementById("linkFeedback"),
+  linkPanel: document.getElementById("linkPanel"),
   printerSelect: document.getElementById("printerSelect"),
   refreshPrinters: document.getElementById("refreshPrinters"),
   testPrint: document.getElementById("testPrint"),
@@ -41,6 +42,7 @@ function renderState(state = {}) {
   els.printedCount.textContent = String(state.printedCount || 0);
   if (!els.apiInput.value && state.api) els.apiInput.value = state.api;
   if (!els.tokenInput.value && state.token) els.tokenInput.value = state.token;
+  els.linkPanel.classList.toggle("needs-link", !state.token || state.status === "Token da loja nao encontrado");
 
   els.errorBox.classList.toggle("hidden", !hasError);
   els.errorText.textContent = state.lastError || "";

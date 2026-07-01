@@ -43,9 +43,13 @@ function resolveConfigPaths(userDataDir = null) {
   const localAppData = process.env.LOCALAPPDATA;
   const appDataNames = [
     "Dino Menu Impressora",
+    "DinoMenu Impressora",
     "EG Delivery",
+    "EG Delivery Printer",
     "EG Delivery Impressora",
+    "EG Delivery Impressora Automatica",
     "eg-delivery-print-agent",
+    "egdelivery-print-agent",
   ];
 
   for (const baseDir of [roamingAppData, localAppData]) {
@@ -150,9 +154,9 @@ class PrintService extends EventEmitter {
     const config = loaded.config || {};
     this.configPath = loaded.path;
     this.config = config;
-    this.api = process.env.EG_PRINT_API || config.api || "http://localhost:8000/api";
-    this.token = process.env.EG_PRINT_TOKEN || config.token || "";
-    this.agentId = process.env.EG_PRINT_AGENT_ID || config.agent_id || `${os.hostname()}-eg-print-agent`;
+    this.api = process.env.EG_PRINT_API || config.api || config.endpoint || config.api_url || "http://localhost:8000/api";
+    this.token = process.env.EG_PRINT_TOKEN || config.token || config.store_token || config.printer_agent_token || config.chave || config.key || "";
+    this.agentId = process.env.EG_PRINT_AGENT_ID || config.agent_id || config.agentId || `${os.hostname()}-eg-print-agent`;
     this.pollMs = Number(process.env.EG_PRINT_POLL_MS || config.poll_ms || 5000);
     this.printerName = process.env.EG_PRINTER_NAME || config.printer_name || "";
     this.setState({
@@ -169,6 +173,15 @@ class PrintService extends EventEmitter {
       ...(this.config || {}),
       ...patch,
     };
+    if (next.token) {
+      next.store_token = next.token;
+      next.printer_agent_token = next.token;
+      next.chave = next.token;
+    }
+    if (next.api) {
+      next.endpoint = next.api;
+      next.api_url = next.api;
+    }
     await writeJson(this.configPath, next);
     this.config = next;
     await this.load();
