@@ -207,6 +207,7 @@ export default function PDV() {
   const [summary, setSummary] = useState(null);
   const [restaurant, setRestaurant] = useState(null);
   const lastPendingIdsRef = useRef(new Set());
+  const pollingPendingRef = useRef(false);
   const playSound = useNotificationSound();
 
   // ── Caixa integrado ──────────────────────────────────────────────
@@ -304,6 +305,8 @@ export default function PDV() {
   };
 
   const pollPendingOrders = useCallback(async () => {
+    if (pollingPendingRef.current || document.visibilityState !== "visible") return;
+    pollingPendingRef.current = true;
     try {
       const r = await api.get("/admin/orders", { params: { status: "pending", limit: 50 } });
       const newIds = new Set((r.data || []).map((o) => o.id));
@@ -317,7 +320,10 @@ export default function PDV() {
         });
       }
       lastPendingIdsRef.current = newIds;
-    } catch {}
+    } catch {
+    } finally {
+      pollingPendingRef.current = false;
+    }
   }, [playSound]);
 
   useEffect(() => {
@@ -330,7 +336,8 @@ export default function PDV() {
   }, []);
 
   useEffect(() => {
-    const interval = setInterval(pollPendingOrders, 5000);
+    pollPendingOrders();
+    const interval = setInterval(pollPendingOrders, 30000);
     return () => clearInterval(interval);
   }, [pollPendingOrders]);
 
