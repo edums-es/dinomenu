@@ -291,9 +291,25 @@ async def download_print_agent(request: Request, user=Depends(require_restaurant
 
     install_bat = """@echo off
 title Instalar Dino Menu Impressora
-set "APPDATA_DIR=%APPDATA%\\Dino Menu Impressora"
-mkdir "%APPDATA_DIR%" >nul 2>nul
-copy /Y "%~dp0config.egdelivery.json" "%APPDATA_DIR%\\config.json" >nul
+set "CONFIG_FILE=%~dp0config.egdelivery.json"
+if not exist "%CONFIG_FILE%" set "CONFIG_FILE=%~dp0config.json"
+if not exist "%CONFIG_FILE%" (
+  echo Arquivo de vinculo da loja nao encontrado.
+  echo Baixe novamente o instalador pelo painel da loja.
+  pause
+  exit /b 1
+)
+
+for %%D in (
+  "%APPDATA%\\Dino Menu Impressora"
+  "%APPDATA%\\EG Delivery"
+  "%APPDATA%\\EG Delivery Impressora"
+  "%APPDATA%\\eg-delivery-print-agent"
+) do (
+  mkdir "%%~D" >nul 2>nul
+  copy /Y "%CONFIG_FILE%" "%%~D\\config.json" >nul
+)
+
 start "" /wait "%~dp0Dino Menu Impressora Setup.exe"
 echo.
 echo Dino Menu Impressora instalado e vinculado a esta loja.
@@ -304,13 +320,16 @@ pause
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         z.write(setup_exe, "Dino Menu Impressora Setup.exe")
         z.writestr("config.egdelivery.json", json.dumps(config, indent=2, ensure_ascii=False))
+        z.writestr("config.json", json.dumps(config, indent=2, ensure_ascii=False))
+        z.writestr("1-INSTALAR-E-VINCULAR-IMPRESSORA.bat", install_bat)
         z.writestr("Instalar Dino Menu Impressora.bat", install_bat)
         z.writestr("LEIA-ME-PRIMEIRO.txt", (
             "Dino Menu - Instalador da Impressora\n\n"
             "1. Extraia este ZIP no computador da loja conectado a impressora.\n"
-            "2. De dois cliques em: Instalar Dino Menu Impressora.bat\n"
+            "2. De dois cliques em: 1-INSTALAR-E-VINCULAR-IMPRESSORA.bat\n"
             "3. Confirme a instalacao do programa.\n"
             "4. Pronto. O icone do Dino Menu ficara perto do relogio do Windows.\n\n"
+            "Nao execute apenas o .exe, pois ele instala o app sem vincular a loja.\n\n"
             "Dentro do programa, use Testar impressao para conferir a impressora.\n"
             "Para suporte, abra Logs e suporte no icone da bandeja.\n"
         ))
