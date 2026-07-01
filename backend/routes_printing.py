@@ -318,7 +318,7 @@ pause
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        z.write(setup_exe, "Dino Menu Impressora Setup.exe")
+        z.write(setup_exe, "Dino Menu Impressora Setup.exe", compress_type=zipfile.ZIP_STORED)
         z.writestr("config.egdelivery.json", json.dumps(config, indent=2, ensure_ascii=False))
         z.writestr("config.json", json.dumps(config, indent=2, ensure_ascii=False))
         z.writestr("1-INSTALAR-E-VINCULAR-IMPRESSORA.bat", install_bat)

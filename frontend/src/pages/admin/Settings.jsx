@@ -145,7 +145,7 @@ export default function Settings() {
     try {
       const { data } = await api.get("/admin/printing/agent/download", {
         responseType: "blob",
-        timeout: 180000,
+        timeout: 0,
       });
       if (data?.type?.includes("application/json")) {
         const payload = JSON.parse(await data.text());
