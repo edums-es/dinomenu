@@ -1,46 +1,55 @@
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { Suspense, lazy } from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { ThemeProvider, ForceLightMode } from "@/context/ThemeContext";
 import { BrandProvider } from "@/context/BrandContext";
 
-import LoginPage from "@/pages/LoginPage";
-import NotFound from "@/pages/NotFound";
-import MenuPage from "@/pages/public/MenuPage";
-import TrackOrder from "@/pages/public/TrackOrder";
-import MyOrders from "@/pages/public/MyOrders";
-import AdminLayout from "@/components/admin/AdminLayout";
-import Dashboard from "@/pages/admin/Dashboard";
-import Orders from "@/pages/admin/Orders";
-import Products from "@/pages/admin/Products";
-import AddonGroups from "@/pages/admin/AddonGroups";
-import Categories from "@/pages/admin/Categories";
-import Coupons from "@/pages/admin/Coupons";
-import Banners from "@/pages/admin/Banners";
-import Settings from "@/pages/admin/Settings";
-import Reports from "@/pages/admin/Reports";
-import Stock from "@/pages/admin/Stock";
-import Combos from "@/pages/admin/Combos";
-import Loyalty from "@/pages/admin/Loyalty";
-import Wholesale from "@/pages/admin/Wholesale";
-import Customers from "@/pages/admin/Customers";
-import PDV from "@/pages/admin/PDV";
-import Suppliers from "@/pages/admin/Suppliers";
-import Tables from "@/pages/admin/Tables";
-import Waiters from "@/pages/admin/Waiters";
-import DeliveryPeople from "@/pages/admin/DeliveryPeople";
-import SuperLayout from "@/components/super/SuperLayout";
-import SuperDashboard from "@/pages/super/SuperDashboard";
-import Restaurants from "@/pages/super/Restaurants";
-import Users from "@/pages/super/Users";
-import Plans from "@/pages/super/Plans";
-import Activations from "@/pages/super/Activations";
-import Billing from "@/pages/super/Billing";
-import Alerts from "@/pages/super/Alerts";
-import Affiliates from "@/pages/super/Affiliates";
-import Resellers from "@/pages/super/Resellers";
-import PlatformSettings from "@/pages/super/PlatformSettings";
-import WhatsApp from "@/pages/admin/WhatsApp";
+const LoginPage = lazy(() => import("@/pages/LoginPage"));
+const NotFound = lazy(() => import("@/pages/NotFound"));
+const MenuPage = lazy(() => import("@/pages/public/MenuPage"));
+const TrackOrder = lazy(() => import("@/pages/public/TrackOrder"));
+const MyOrders = lazy(() => import("@/pages/public/MyOrders"));
+const AdminLayout = lazy(() => import("@/components/admin/AdminLayout"));
+const Dashboard = lazy(() => import("@/pages/admin/Dashboard"));
+const Orders = lazy(() => import("@/pages/admin/Orders"));
+const Products = lazy(() => import("@/pages/admin/Products"));
+const AddonGroups = lazy(() => import("@/pages/admin/AddonGroups"));
+const Categories = lazy(() => import("@/pages/admin/Categories"));
+const Coupons = lazy(() => import("@/pages/admin/Coupons"));
+const Banners = lazy(() => import("@/pages/admin/Banners"));
+const Settings = lazy(() => import("@/pages/admin/Settings"));
+const Reports = lazy(() => import("@/pages/admin/Reports"));
+const Stock = lazy(() => import("@/pages/admin/Stock"));
+const Combos = lazy(() => import("@/pages/admin/Combos"));
+const Loyalty = lazy(() => import("@/pages/admin/Loyalty"));
+const Wholesale = lazy(() => import("@/pages/admin/Wholesale"));
+const Customers = lazy(() => import("@/pages/admin/Customers"));
+const PDV = lazy(() => import("@/pages/admin/PDV"));
+const Suppliers = lazy(() => import("@/pages/admin/Suppliers"));
+const Tables = lazy(() => import("@/pages/admin/Tables"));
+const Waiters = lazy(() => import("@/pages/admin/Waiters"));
+const DeliveryPeople = lazy(() => import("@/pages/admin/DeliveryPeople"));
+const WhatsApp = lazy(() => import("@/pages/admin/WhatsApp"));
+const SuperLayout = lazy(() => import("@/components/super/SuperLayout"));
+const SuperDashboard = lazy(() => import("@/pages/super/SuperDashboard"));
+const Restaurants = lazy(() => import("@/pages/super/Restaurants"));
+const Users = lazy(() => import("@/pages/super/Users"));
+const Plans = lazy(() => import("@/pages/super/Plans"));
+const Activations = lazy(() => import("@/pages/super/Activations"));
+const Billing = lazy(() => import("@/pages/super/Billing"));
+const Alerts = lazy(() => import("@/pages/super/Alerts"));
+const Affiliates = lazy(() => import("@/pages/super/Affiliates"));
+const Resellers = lazy(() => import("@/pages/super/Resellers"));
+const PlatformSettings = lazy(() => import("@/pages/super/PlatformSettings"));
+
+function RouteLoader() {
+  return (
+    <div className="min-h-screen grid place-items-center text-muted-foreground">
+      Carregando...
+    </div>
+  );
+}
 
 function Protected({ children, roles }) {
   const { user } = useAuth();
@@ -56,6 +65,7 @@ function App() {
       <BrandProvider>
         <AuthProvider>
           <BrowserRouter>
+            <Suspense fallback={<RouteLoader />}>
             <Routes>
             <Route path="/themazuki/master" element={<ForceLightMode><LoginPage /></ForceLightMode>} />
             <Route path="/loja/:slug" element={<ForceLightMode><MenuPage /></ForceLightMode>} />
@@ -103,6 +113,7 @@ function App() {
 
             <Route path="*" element={<ForceLightMode><NotFound /></ForceLightMode>} />
             </Routes>
+            </Suspense>
             <Toaster position="top-center" richColors />
           </BrowserRouter>
         </AuthProvider>

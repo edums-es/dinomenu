@@ -206,7 +206,7 @@ export default function PDV() {
   const [receiptData, setReceiptData] = useState(null);
   const [summary, setSummary] = useState(null);
   const [restaurant, setRestaurant] = useState(null);
-  const [lastPendingIds, setLastPendingIds] = useState(new Set());
+  const lastPendingIdsRef = useRef(new Set());
   const playSound = useNotificationSound();
 
   // ── Caixa integrado ──────────────────────────────────────────────
@@ -305,19 +305,20 @@ export default function PDV() {
 
   const pollPendingOrders = useCallback(async () => {
     try {
-      const r = await api.get("/admin/orders", { params: { status: "pending" } });
+      const r = await api.get("/admin/orders", { params: { status: "pending", limit: 50 } });
       const newIds = new Set((r.data || []).map((o) => o.id));
-      const hasNew = [...newIds].some((id) => !lastPendingIds.has(id));
-      if (hasNew && lastPendingIds.size > 0) {
+      const previousIds = lastPendingIdsRef.current;
+      const hasNew = [...newIds].some((id) => !previousIds.has(id));
+      if (hasNew && previousIds.size > 0) {
         playSound();
         toast("Novo pedido recebido!", {
           icon: <Bell className="w-4 h-4 text-orange-500" />,
           duration: 6000,
         });
       }
-      setLastPendingIds(newIds);
+      lastPendingIdsRef.current = newIds;
     } catch {}
-  }, [lastPendingIds, playSound]);
+  }, [playSound]);
 
   useEffect(() => {
     fetchCaixa();
