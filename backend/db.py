@@ -48,6 +48,39 @@ def _unset(document, path):
     target.pop(parts[-1], None)
 
 
+def _merge_nested(target, path, value):
+    current = target
+    parts = path.split(".")
+    for part in parts[:-1]:
+        current = current.setdefault(part, {})
+        if not isinstance(current, dict):
+            return False
+    current[parts[-1]] = _normalize(value)
+    return True
+
+
+def _sql_prefilter(query):
+    """Return a JSONB containment filter for plain equality clauses.
+
+    The in-memory matcher still validates the full query after this. The SQL
+    filter only narrows the candidate rows so common tenant/login lookups do
+    not load whole collections.
+    """
+    if not isinstance(query, dict):
+        return None
+    filters = {}
+    for key, condition in query.items():
+        if key in {"$or", "$and"}:
+            continue
+        if key == "_id":
+            continue
+        if isinstance(condition, dict):
+            continue
+        if not _merge_nested(filters, key, condition):
+            return None
+    return filters or None
+
+
 _MISSING = object()
 
 
@@ -180,7 +213,8 @@ class Cursor:
         return self
 
     async def to_list(self, length=None):
-        documents = await self.collection._all()
+        rows = await self.collection._candidates(self.query if self.pipeline is None else None)
+        documents = [dict(row["document"]) for row in rows]
         if self.pipeline is not None:
             documents = _aggregate(documents, self.pipeline)
         else:
@@ -257,8 +291,36 @@ class Collection:
             if connection is None:
                 await self.database.pool.release(conn)
 
+    async def _candidates(self, query=None, connection=None, for_update=False):
+        conn = connection or await self.database.pool.acquire()
+        try:
+            clauses = ["collection = $1"]
+            args = [self.name]
+            idx = 2
+            if isinstance(query, dict):
+                document_key = query.get("_id")
+                if not isinstance(document_key, dict) and document_key is not None:
+                    clauses.append(f"document_key = ${idx}")
+                    args.append(str(document_key))
+                    idx += 1
+                containment = _sql_prefilter(query)
+                if containment:
+                    clauses.append(f"document @> ${idx}::jsonb")
+                    args.append(containment)
+                    idx += 1
+            lock = " FOR UPDATE" if for_update else ""
+            rows = await conn.fetch(
+                f"SELECT document_key, document FROM documents WHERE {' AND '.join(clauses)}{lock}",
+                *args,
+            )
+            return rows
+        finally:
+            if connection is None:
+                await self.database.pool.release(conn)
+
     async def find_one(self, query, projection=None, sort=None):
-        documents = [doc for doc in await self._all() if _matches(doc, query)]
+        rows = await self._candidates(query)
+        documents = [dict(row["document"]) for row in rows if _matches(dict(row["document"]), query)]
         _sort_documents(documents, sort or [])
         return _project(documents[0], projection) if documents else None
 
@@ -281,16 +343,14 @@ class Collection:
         return SimpleNamespace(inserted_id=doc["_id"])
 
     async def count_documents(self, query):
-        return sum(1 for doc in await self._all() if _matches(doc, query))
+        rows = await self._candidates(query)
+        return sum(1 for row in rows if _matches(dict(row["document"]), query))
 
     async def update_one(self, query, update, upsert=False):
         async with self.database.pool.acquire() as conn:
             async with conn.transaction():
                 await conn.execute("SELECT pg_advisory_xact_lock(hashtext($1))", self.name)
-                rows = await conn.fetch(
-                    "SELECT document_key, document FROM documents WHERE collection = $1 FOR UPDATE",
-                    self.name,
-                )
+                rows = await self._candidates(query, connection=conn, for_update=True)
                 for row in rows:
                     doc = dict(row["document"])
                     if _matches(doc, query):
@@ -317,10 +377,7 @@ class Collection:
         async with self.database.pool.acquire() as conn:
             async with conn.transaction():
                 await conn.execute("SELECT pg_advisory_xact_lock(hashtext($1))", self.name)
-                rows = await conn.fetch(
-                    "SELECT document_key, document FROM documents WHERE collection = $1 FOR UPDATE",
-                    self.name,
-                )
+                rows = await self._candidates(query, connection=conn, for_update=True)
                 for row in rows:
                     doc = dict(row["document"])
                     if not _matches(doc, query):
@@ -338,10 +395,7 @@ class Collection:
         async with self.database.pool.acquire() as conn:
             async with conn.transaction():
                 await conn.execute("SELECT pg_advisory_xact_lock(hashtext($1))", self.name)
-                rows = await conn.fetch(
-                    "SELECT document_key, document FROM documents WHERE collection = $1 FOR UPDATE",
-                    self.name,
-                )
+                rows = await self._candidates(query, connection=conn, for_update=True)
                 for row in rows:
                     doc = dict(row["document"])
                     if _matches(doc, query):
@@ -357,10 +411,7 @@ class Collection:
         deleted = 0
         async with self.database.pool.acquire() as conn:
             async with conn.transaction():
-                rows = await conn.fetch(
-                    "SELECT document_key, document FROM documents WHERE collection = $1 FOR UPDATE",
-                    self.name,
-                )
+                rows = await self._candidates(query, connection=conn, for_update=True)
                 for row in rows:
                     if _matches(dict(row["document"]), query):
                         await conn.execute(
@@ -375,10 +426,7 @@ class Collection:
         deleted = 0
         async with self.database.pool.acquire() as conn:
             async with conn.transaction():
-                rows = await conn.fetch(
-                    "SELECT document_key, document FROM documents WHERE collection = $1 FOR UPDATE",
-                    self.name,
-                )
+                rows = await self._candidates(query, connection=conn, for_update=True)
                 for row in rows:
                     if _matches(dict(row["document"]), query):
                         await conn.execute(
@@ -438,6 +486,7 @@ class Database:
             """
         )
         await self.pool.execute("CREATE INDEX IF NOT EXISTS ix_documents_collection ON documents (collection)")
+        await self.pool.execute("CREATE INDEX IF NOT EXISTS ix_documents_document_gin ON documents USING GIN (document jsonb_path_ops)")
 
     async def close(self):
         if self.pool is not None:
