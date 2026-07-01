@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dino Menu Impressora</title>
+    <title>EG Delivery Impressora</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -11,22 +11,43 @@
       <header class="topbar">
         <div class="brand-mark">EG</div>
         <div>
-          <strong>Dino Menu</strong>
-          <span>Impressora automática</span>
+          <strong>EG Delivery</strong>
+          <span>Impressora automatica</span>
         </div>
       </header>
+
+      <section id="linkPanel" class="panel link-panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Conectar loja manualmente</h2>
+            <p class="muted">Cole a URL/API e o token exibidos no painel da loja.</p>
+          </div>
+        </div>
+        <div class="link-grid">
+          <div>
+            <label for="apiInput">URL/API</label>
+            <input id="apiInput" type="url" placeholder="https://api.easygrowth.com.br/api" autocomplete="off" />
+          </div>
+          <div>
+            <label for="tokenInput">Token da loja</label>
+            <input id="tokenInput" type="password" placeholder="Cole o token do programa" autocomplete="off" />
+          </div>
+        </div>
+        <button id="linkStore" class="primary full-width">Salvar token e conectar</button>
+        <p id="linkFeedback" class="muted feedback"></p>
+      </section>
 
       <section class="status-card">
         <div class="status-row">
           <span id="statusDot" class="status-dot"></span>
           <div>
             <p id="statusLabel" class="status-label">Iniciando</p>
-            <p id="statusHint" class="muted">Verificando conexão com a loja.</p>
+            <p id="statusHint" class="muted">Verificando conexao com a loja.</p>
           </div>
         </div>
         <div class="metrics">
           <div>
-            <span>Último pedido</span>
+            <span>Ultimo pedido</span>
             <strong id="lastOrder">-</strong>
           </div>
           <div>
@@ -36,45 +57,24 @@
         </div>
       </section>
 
-      <section id="linkPanel" class="panel link-panel">
-        <div class="panel-heading">
-          <div>
-            <h2>Vincular loja</h2>
-            <p class="muted">Cole os dados exibidos no painel de impressao da loja.</p>
-          </div>
-        </div>
-        <div class="link-grid">
-          <div>
-            <label for="apiInput">URL/API do painel</label>
-            <input id="apiInput" type="url" placeholder="https://seu-dominio.com/api" autocomplete="off" />
-          </div>
-          <div>
-            <label for="tokenInput">Token/chave da loja</label>
-            <input id="tokenInput" type="password" placeholder="Cole o token da loja" autocomplete="off" />
-          </div>
-        </div>
-        <button id="linkStore" class="secondary full-width">Vincular loja</button>
-        <p id="linkFeedback" class="muted feedback"></p>
-      </section>
-
       <section class="panel">
         <label for="printerSelect">Impressora</label>
         <div class="printer-row">
           <select id="printerSelect">
-            <option value="">Impressora padrão do Windows</option>
+            <option value="">Impressora padrao do Windows</option>
           </select>
-          <button id="refreshPrinters" class="icon-button" title="Atualizar impressoras">↻</button>
+          <button id="refreshPrinters" class="icon-button" title="Atualizar impressoras">R</button>
         </div>
-        <p class="muted">Deixe como padrão se a loja usa só uma impressora.</p>
+        <p class="muted">Deixe como padrao se a loja usa so uma impressora.</p>
       </section>
 
       <section class="actions">
-        <button id="testPrint" class="primary">Testar impressão</button>
-        <button id="restart" class="secondary">Reiniciar conexão</button>
+        <button id="testPrint" class="primary">Testar impressao</button>
+        <button id="restart" class="secondary">Reiniciar conexao</button>
       </section>
 
       <section id="errorBox" class="error-box hidden">
-        <strong>Atenção</strong>
+        <strong>Atencao</strong>
         <p id="errorText"></p>
       </section>
 

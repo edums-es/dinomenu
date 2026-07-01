@@ -34,15 +34,16 @@ function renderState(state = {}) {
   els.statusDot.className = `status-dot ${connected ? "ok" : hasError ? "error" : ""}`;
   els.statusLabel.textContent = state.status || "Iniciando";
   els.statusHint.textContent = connected
-    ? "Conectado ao Dino Menu e aguardando pedidos aceitos."
+    ? "Conectado ao EG Delivery e aguardando pedidos."
     : hasError
-      ? "Confira impressora, internet ou vínculo da loja."
-      : "Aguardando conexão com a loja.";
+      ? "Confira a URL/API, token, internet ou impressora."
+      : "Aguardando conexao com a loja.";
   els.lastOrder.textContent = state.lastOrder ? `#${state.lastOrder}` : "-";
   els.printedCount.textContent = String(state.printedCount || 0);
-  if (!els.apiInput.value && state.api) els.apiInput.value = state.api;
+
+  if (!els.apiInput.value) els.apiInput.value = state.api || "https://api.easygrowth.com.br/api";
   if (!els.tokenInput.value && state.token) els.tokenInput.value = state.token;
-  els.linkPanel.classList.toggle("needs-link", !state.token || state.status === "Token da loja nao encontrado");
+  els.linkPanel.classList.toggle("needs-link", hasError || !state.token || state.status === "Token da loja nao encontrado");
 
   els.errorBox.classList.toggle("hidden", !hasError);
   els.errorText.textContent = state.lastError || "";
@@ -55,7 +56,7 @@ function renderState(state = {}) {
 async function loadPrinters() {
   const selected = currentPrinter || els.printerSelect.value;
   const printers = await window.egPrint.listPrinters();
-  els.printerSelect.innerHTML = '<option value="">Impressora padrão do Windows</option>';
+  els.printerSelect.innerHTML = '<option value="">Impressora padrao do Windows</option>';
   printers.forEach((printer) => {
     const option = document.createElement("option");
     option.value = printer;
@@ -82,16 +83,16 @@ els.printerSelect.addEventListener("change", async () => {
 
 els.linkStore.addEventListener("click", async () => {
   setBusy(els.linkStore, true);
-  els.linkFeedback.textContent = "Vinculando loja...";
+  els.linkFeedback.textContent = "Salvando token e conectando...";
   try {
     const state = await window.egPrint.linkStore({
       api: els.apiInput.value,
       token: els.tokenInput.value,
     });
     renderState(state);
-    els.linkFeedback.textContent = "Loja vinculada. Conexao reiniciada.";
+    els.linkFeedback.textContent = "Token salvo. Conexao reiniciada.";
   } catch (error) {
-    els.linkFeedback.textContent = error?.message || "Nao foi possivel vincular a loja.";
+    els.linkFeedback.textContent = error?.message || "Nao foi possivel salvar o token.";
   } finally {
     setBusy(els.linkStore, false);
   }

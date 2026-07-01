@@ -25,10 +25,10 @@ function createWindow() {
   }
 
   mainWindow = new BrowserWindow({
-    width: 460,
-    height: 720,
+    width: 520,
+    height: 820,
     minWidth: 420,
-    minHeight: 680,
+    minHeight: 760,
     show: false,
     title: "Dino Menu Impressora",
     backgroundColor: "#050807",
