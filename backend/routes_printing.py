@@ -98,13 +98,13 @@ def _generate_qz_material() -> dict:
     from cryptography import x509
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import rsa
-    from cryptography.x509.oid import NameOID
+    from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     subject = issuer = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, "BR"),
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, "EG Delivery"),
-        x509.NameAttribute(NameOID.COMMON_NAME, "EG Delivery QZ Tray"),
+        x509.NameAttribute(NameOID.COMMON_NAME, "app.easygrowth.com.br"),
     ])
     certificate = (
         x509.CertificateBuilder()
@@ -114,10 +114,33 @@ def _generate_qz_material() -> dict:
         .serial_number(x509.random_serial_number())
         .not_valid_before(datetime.now(timezone.utc) - timedelta(days=1))
         .not_valid_after(datetime.now(timezone.utc) + timedelta(days=3650))
-        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(
+            x509.SubjectAlternativeName([
+                x509.DNSName("app.easygrowth.com.br"),
+                x509.DNSName("*.easygrowth.com.br"),
+            ]),
+            critical=False,
+        )
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True,
+                content_commitment=True,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=False,
+                crl_sign=False,
+                encipher_only=False,
+                decipher_only=False,
+            ),
+            critical=True,
+        )
+        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.CODE_SIGNING]), critical=False)
         .sign(key, hashes.SHA256())
     )
     return {
+        "version": 2,
         "certificate": certificate.public_bytes(serialization.Encoding.PEM).decode("utf-8"),
         "private_key": key.private_bytes(
             serialization.Encoding.PEM,
@@ -139,7 +162,7 @@ async def _get_qz_material() -> dict:
         )
 
     stored = await db.platform_settings.find_one({"_id": "qz_tray"}, {"_id": 0})
-    if stored and stored.get("certificate") and stored.get("private_key"):
+    if stored and stored.get("version") == 2 and stored.get("certificate") and stored.get("private_key"):
         return {"certificate": stored["certificate"], "private_key": stored["private_key"]}
 
     generated = _generate_qz_material()
