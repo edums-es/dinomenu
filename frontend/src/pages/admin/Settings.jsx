@@ -48,6 +48,9 @@ const PRINT_TRIGGER_LABELS = {
   ready: "Quando ficar pronto",
 };
 
+const BROWSER_PRINT_ENABLED_KEY = "eg_browser_print_enabled";
+const BROWSER_PRINT_TRIGGER_KEY = "eg_browser_print_trigger";
+
 export default function Settings() {
   const { brand } = useBrand();
   const [r, setR] = useState(null);
@@ -56,6 +59,10 @@ export default function Settings() {
   const [printJobs, setPrintJobs] = useState([]);
   const [savingPrinting, setSavingPrinting] = useState(false);
   const [downloadingPrintAgent, setDownloadingPrintAgent] = useState(false);
+  const [browserPrint, setBrowserPrint] = useState(() => ({
+    enabled: localStorage.getItem(BROWSER_PRINT_ENABLED_KEY) === "true",
+    trigger: localStorage.getItem(BROWSER_PRINT_TRIGGER_KEY) || "pending",
+  }));
 
   useEffect(() => { api.get("/admin/restaurant").then((res) => setR(res.data)); }, []);
   useEffect(() => {
@@ -112,6 +119,8 @@ export default function Settings() {
         printer_include_payment: !!printing.printer_include_payment,
       };
       const { data } = await api.put("/admin/printing/settings", payload);
+      localStorage.setItem(BROWSER_PRINT_ENABLED_KEY, browserPrint.enabled ? "true" : "false");
+      localStorage.setItem(BROWSER_PRINT_TRIGGER_KEY, browserPrint.trigger || "pending");
       setPrinting(data);
       toast.success("Configurações de impressão salvas");
     } catch {
@@ -459,6 +468,59 @@ export default function Settings() {
 
         {/* Impressão */}
         <TabsContent value="impressao" className="space-y-4">
+          <div className={`${PANEL} space-y-4 border-emerald-200 dark:border-emerald-900`}>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <span className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 grid place-items-center">
+                  <Printer className="w-5 h-5" />
+                </span>
+                <div>
+                  <h2 className="font-display font-bold text-lg dark:text-white">Impressao pelo navegador</h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Sem app instalado. Funciona neste computador enquanto o painel de pedidos estiver aberto.
+                  </p>
+                </div>
+              </div>
+              <label className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3">
+                <Switch
+                  checked={!!browserPrint.enabled}
+                  onCheckedChange={(v) => setBrowserPrint((p) => ({ ...p, enabled: v }))}
+                />
+                <span>
+                  <span className="block text-sm font-semibold dark:text-white">Ativar neste computador</span>
+                  <span className="block text-xs text-gray-500 dark:text-gray-400">Usa a impressao do navegador</span>
+                </span>
+              </label>
+            </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <Label className="dark:text-gray-200">Quando imprimir pelo navegador</Label>
+                <Select
+                  value={browserPrint.trigger || "pending"}
+                  onValueChange={(v) => setBrowserPrint((p) => ({ ...p, trigger: v }))}
+                >
+                  <SelectTrigger className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
+                    <SelectItem value="pending">Automatico, quando o pedido entrar</SelectItem>
+                    <SelectItem value="accepted">Somente apos aceitar o pedido</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="rounded-xl bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 p-3">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  O navegador usa a impressora padrao ou abre o dialogo de impressao. Para imprimir sem dialogo, configure o Chrome/Windows em modo kiosk ou impressora padrao.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button onClick={savePrinting} disabled={savingPrinting} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl">
+                {savingPrinting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-1" /> Salvar impressao pelo navegador</>}
+              </Button>
+            </div>
+          </div>
+
           <div className={`${PANEL} space-y-5`}>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
