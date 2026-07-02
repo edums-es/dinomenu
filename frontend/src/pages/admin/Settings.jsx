@@ -12,9 +12,8 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from "@/components/ui/select";
 import ImageUpload from "@/components/admin/ImageUpload";
-import { Loader2, Save, Copy, Check, Printer, RefreshCw, KeyRound, Activity, Download, MonitorDown } from "lucide-react";
+import { Loader2, Save, Copy, Check, Printer, RefreshCw, Activity, Download, MonitorDown } from "lucide-react";
 import { API } from "@/lib/api";
-import { useBrand } from "@/context/BrandContext";
 import { getQzPrintSettings, listQzPrinters, printQzText, saveQzPrintSettings } from "@/lib/qzPrint";
 
 const PAYMENT_OPTIONS = ["Pix", "Dinheiro", "Cartão de crédito", "Cartão de débito", "Vale refeição"];
@@ -42,21 +41,12 @@ function WebhookUrlCopy({ url }) {
 /* shared panel class */
 const PANEL = "bg-white dark:bg-[#111111] rounded-2xl border border-gray-200 dark:border-gray-700 p-5";
 
-const PRINT_TRIGGER_LABELS = {
-  pending: "Quando o pedido entrar",
-  accepted: "Quando o pedido for aceito",
-  preparing: "Quando entrar em preparo",
-  ready: "Quando ficar pronto",
-};
-
 export default function Settings() {
-  const { brand } = useBrand();
   const [r, setR] = useState(null);
   const [saving, setSaving] = useState(false);
   const [printing, setPrinting] = useState(null);
   const [printJobs, setPrintJobs] = useState([]);
   const [savingPrinting, setSavingPrinting] = useState(false);
-  const [downloadingPrintAgent, setDownloadingPrintAgent] = useState(false);
   const [qzPrint, setQzPrint] = useState(() => getQzPrintSettings());
   const [qzPrinters, setQzPrinters] = useState([]);
   const [qzStatus, setQzStatus] = useState("idle");
@@ -69,7 +59,6 @@ export default function Settings() {
   }, []);
 
   const set = (patch) => setR((p) => ({ ...p, ...patch }));
-  const setPrint = (patch) => setPrinting((p) => ({ ...p, ...patch }));
   const setQz = (patch) => setQzPrint((p) => ({ ...p, ...patch }));
 
   const save = async () => {
@@ -109,7 +98,7 @@ export default function Settings() {
     setSavingPrinting(true);
     try {
       const payload = {
-        printing_enabled: !!printing.printing_enabled,
+        printing_enabled: false,
         printing_trigger_status: printing.printing_trigger_status || "accepted",
         printer_name: printing.printer_name || "",
         printer_copies: Number(printing.printer_copies) || 1,
@@ -166,59 +155,6 @@ export default function Settings() {
       toast.error(detail);
     } finally {
       setQzTesting(false);
-    }
-  };
-
-  const regeneratePrintToken = async () => {
-    if (!window.confirm("Gerar um novo token desconecta agentes de impressão antigos. Continuar?")) return;
-    const { data } = await api.post("/admin/printing/token");
-    setPrint({ printer_agent_token: data.printer_agent_token });
-    toast.success("Token regenerado");
-  };
-
-  const copyText = async (text, label = "Copiado") => {
-    await navigator.clipboard.writeText(text);
-    toast.success(label);
-  };
-
-  const downloadPrintAgent = async () => {
-    if (downloadingPrintAgent) return;
-    setDownloadingPrintAgent(true);
-    const loadingToast = toast.loading("Preparando download do instalador...");
-    try {
-      const { data } = await api.get("/admin/printing/agent/download", {
-        responseType: "blob",
-        timeout: 0,
-      });
-      if (data?.type?.includes("application/json")) {
-        const payload = JSON.parse(await data.text());
-        throw new Error(payload?.detail || "Nao foi possivel baixar o instalador.");
-      }
-      const url = URL.createObjectURL(data);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "eg-delivery-impressora-windows.zip";
-      a.rel = "noopener";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-      toast.success("Instalador Windows baixado", { id: loadingToast });
-    } catch (err) {
-      let message = err?.message || "Erro ao baixar instalador Windows";
-      const responseData = err?.response?.data;
-      if (responseData instanceof Blob) {
-        try {
-          const text = await responseData.text();
-          const parsed = JSON.parse(text);
-          message = parsed?.detail || message;
-        } catch {}
-      } else if (err?.response?.data?.detail) {
-        message = err.response.data.detail;
-      }
-      toast.error(message, { id: loadingToast });
-    } finally {
-      setDownloadingPrintAgent(false);
     }
   };
 
@@ -645,157 +581,41 @@ export default function Settings() {
             </div>
           </div>
 
-          <div className={`${PANEL} space-y-5`}>
+          <div className={`${PANEL} space-y-4 border-emerald-200 dark:border-emerald-900 bg-emerald-50/60 dark:bg-emerald-950/10`}>
             <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 grid place-items-center">
-                    <MonitorDown className="w-5 h-5" />
-                  </span>
-                  <div>
-                    <h2 className="font-display font-bold text-lg dark:text-white">Alternativa: programa local antigo</h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Mantido como plano B para lojas que ainda usam o app por token.
-                    </p>
-                  </div>
+              <div className="flex items-start gap-3 max-w-3xl">
+                <span className="w-10 h-10 rounded-xl bg-white dark:bg-black/20 text-emerald-600 dark:text-emerald-400 grid place-items-center shrink-0">
+                  <MonitorDown className="w-5 h-5" />
+                </span>
+                <div>
+                  <h2 className="font-display font-bold text-lg text-gray-900 dark:text-white">Instalar QZ Tray</h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Baixe o QZ Tray no computador da loja, instale, deixe aberto perto do relogio e depois clique em Reconhecer impressoras.
+                  </p>
                 </div>
               </div>
-              <label className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3">
-                <Switch checked={!!printing.printing_enabled} onCheckedChange={(v) => setPrint({ printing_enabled: v })} />
-                <span>
-                  <span className="block text-sm font-semibold dark:text-white">Ativar app antigo</span>
-                  <span className="block text-xs text-gray-500 dark:text-gray-400">Usa fila/token do agente local</span>
-                </span>
-              </label>
-            </div>
-
-            <div className="grid md:grid-cols-3 gap-4">
-              <div>
-                <Label className="dark:text-gray-200">Quando imprimir</Label>
-                <Select value={printing.printing_trigger_status || "accepted"} onValueChange={(v) => setPrint({ printing_trigger_status: v })}>
-                  <SelectTrigger className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
-                    {Object.entries(PRINT_TRIGGER_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>{label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="dark:text-gray-200">Nome da impressora</Label>
-                <Input
-                  value={printing.printer_name || ""}
-                  onChange={(e) => setPrint({ printer_name: e.target.value })}
-                  placeholder="Ex: EPSON TM-T20"
-                  className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
-                />
-                <p className="text-xs text-gray-400 mt-1">Deixe vazio para usar a impressora padrão do Windows.</p>
-              </div>
-              <div>
-                <Label className="dark:text-gray-200">Cópias</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={5}
-                  value={printing.printer_copies || 1}
-                  onChange={(e) => setPrint({ printer_copies: e.target.value })}
-                  className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
-                />
-              </div>
+              <Button asChild className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl">
+                <a
+                  href="https://github.com/qzind/tray/releases/download/v2.2.6/qz-tray-2.2.6-x86_64.exe"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Download className="w-4 h-4 mr-1" /> Baixar QZ Tray
+                </a>
+              </Button>
             </div>
 
             <div className="grid md:grid-cols-3 gap-3">
               {[
-                ["printer_include_customer_phone", "Telefone do cliente"],
-                ["printer_include_address", "Endereço de entrega"],
-                ["printer_include_payment", "Forma de pagamento"],
-              ].map(([key, label]) => (
-                <label key={key} className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3">
-                  <span className="text-sm font-medium dark:text-gray-200">{label}</span>
-                  <Switch checked={!!printing[key]} onCheckedChange={(v) => setPrint({ [key]: v })} />
-                </label>
+                ["1", "Baixe e instale o QZ Tray no computador da loja."],
+                ["2", "Abra o QZ Tray e mantenha ele ativo no Windows."],
+                ["3", "Volte aqui e use Reconhecer impressoras."],
+              ].map(([step, text]) => (
+                <div key={step} className="rounded-xl bg-white/75 dark:bg-black/20 border border-white dark:border-emerald-900/60 p-3">
+                  <span className="inline-grid place-items-center w-6 h-6 rounded-full bg-emerald-600 text-white text-xs font-bold mb-2">{step}</span>
+                  <p className="text-xs leading-relaxed text-gray-600 dark:text-gray-300">{text}</p>
+                </div>
               ))}
-            </div>
-
-            <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <KeyRound className="w-4 h-4 text-emerald-500" />
-                <h3 className="font-semibold dark:text-white">Vinculo do programa local</h3>
-              </div>
-              <div className="grid md:grid-cols-2 gap-3">
-                <div>
-                  <Label className="dark:text-gray-200">Endpoint</Label>
-                  <WebhookUrlCopy url={`${API}/print-agent/jobs/claim`} />
-                </div>
-                <div>
-                  <Label className="dark:text-gray-200">Token do programa</Label>
-                  <div className="flex gap-2 items-center">
-                    <code className="flex-1 text-xs bg-black/10 dark:bg-black/30 rounded px-2 py-1.5 truncate select-all dark:text-green-400 text-green-700">
-                      {printing.printer_agent_token}
-                    </code>
-                    <button onClick={() => copyText(printing.printer_agent_token, "Token copiado")} className="shrink-0 flex items-center gap-1 text-xs px-2 py-1.5 rounded border dark:border-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                      <Copy className="w-3.5 h-3.5" /> Copiar
-                    </button>
-                    <button onClick={regeneratePrintToken} className="shrink-0 flex items-center gap-1 text-xs px-2 py-1.5 rounded border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors">
-                      <RefreshCw className="w-3.5 h-3.5" /> Novo
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Esse vinculo ja vai dentro do instalador baixado por esta loja. Use estes dados apenas para suporte tecnico.
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/70 dark:bg-emerald-950/20 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="flex items-start gap-3 max-w-2xl">
-                  <span className="w-10 h-10 rounded-xl bg-white dark:bg-black/20 text-emerald-600 dark:text-emerald-400 grid place-items-center shrink-0">
-                    <MonitorDown className="w-5 h-5" />
-                  </span>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-white">Instalador Windows da impressora</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                      Baixe no computador da loja, instale o app e deixe o icone do {brand.short_name || brand.name} ativo perto do relogio do Windows.
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  type="button"
-                  onClick={downloadPrintAgent}
-                  disabled={downloadingPrintAgent}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl disabled:opacity-70"
-                >
-                  {downloadingPrintAgent
-                    ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Baixando...</>
-                    : <><Download className="w-4 h-4 mr-1" /> Baixar instalador Windows</>}
-                </Button>
-              </div>
-
-              <div className="grid md:grid-cols-4 gap-3 mt-4">
-                {[
-                  ["1", "Baixe e extraia o pacote no computador da loja."],
-                  ["2", "De dois cliques no arquivo de instalacao da impressora."],
-                  ["3", "Finalize a instalacao e mantenha o app aberto na bandeja."],
-                  ["4", "Use Testar impressao para conferir a impressora."],
-                ].map(([step, text]) => (
-                  <div key={step} className="rounded-xl bg-white/75 dark:bg-black/20 border border-white dark:border-emerald-900/60 p-3">
-                    <span className="inline-grid place-items-center w-6 h-6 rounded-full bg-emerald-600 text-white text-xs font-bold mb-2">{step}</span>
-                    <p className="text-xs leading-relaxed text-gray-600 dark:text-gray-300">{text}</p>
-                  </div>
-                ))}
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
-                Normalmente nao precisa configurar nada. O programa fica na bandeja do Windows, mostra status da conexao e permite testar a impressora.
-              </p>
-            </div>
-
-            <div className="flex justify-end">
-              <Button onClick={savePrinting} disabled={savingPrinting} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl">
-                {savingPrinting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-1" /> Salvar impressão</>}
-              </Button>
             </div>
           </div>
 
