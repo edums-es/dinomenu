@@ -1,6 +1,7 @@
 """Printing settings, queue and local print-agent endpoints."""
 import io
 import json
+import os
 import secrets
 import zipfile
 from datetime import datetime, timezone, timedelta
@@ -8,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 
 from auth import require_restaurant
@@ -64,6 +65,10 @@ class PrintingSettingsIn(BaseModel):
     printer_include_payment: bool = True
 
 
+class QzSignatureIn(BaseModel):
+    request: str
+
+
 class AgentClaimIn(BaseModel):
     token: str
     agent_id: Optional[str] = "eg-print-agent"
@@ -75,6 +80,18 @@ class AgentCompleteIn(BaseModel):
     agent_id: Optional[str] = "eg-print-agent"
     success: bool = True
     error: Optional[str] = None
+
+
+def _read_env_or_file(value_key: str, path_key: str) -> Optional[str]:
+    value = os.getenv(value_key)
+    if value:
+        return value.replace("\\n", "\n")
+    path = os.getenv(path_key)
+    if path:
+        cert_path = Path(path)
+        if cert_path.exists():
+            return cert_path.read_text(encoding="utf-8")
+    return None
 
 
 def _money(value) -> str:
@@ -253,6 +270,40 @@ async def regenerate_printing_token(user=Depends(require_restaurant)):
     token = secrets.token_urlsafe(32)
     await db.restaurants.update_one({"id": rid(user)}, {"$set": {"printer_agent_token": token, "updated_at": now_iso()}})
     return {"printer_agent_token": token}
+
+
+@router.get("/admin/printing/qz/certificate", response_class=PlainTextResponse)
+async def get_qz_certificate(user=Depends(require_restaurant)):
+    certificate = _read_env_or_file("QZ_CERTIFICATE", "QZ_CERTIFICATE_PATH")
+    if not certificate:
+        raise HTTPException(
+            503,
+            "Certificado do QZ Tray nao configurado no servidor. Configure QZ_CERTIFICATE ou QZ_CERTIFICATE_PATH.",
+        )
+    return certificate
+
+
+@router.post("/admin/printing/qz/signature")
+async def sign_qz_request(data: QzSignatureIn, user=Depends(require_restaurant)):
+    private_key = _read_env_or_file("QZ_PRIVATE_KEY", "QZ_PRIVATE_KEY_PATH")
+    if not private_key:
+        raise HTTPException(
+            503,
+            "Chave privada do QZ Tray nao configurada no servidor. Configure QZ_PRIVATE_KEY ou QZ_PRIVATE_KEY_PATH.",
+        )
+    try:
+        import base64
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import padding
+    except Exception as exc:
+        raise HTTPException(500, f"Biblioteca de assinatura indisponivel: {exc}")
+
+    try:
+        key = serialization.load_pem_private_key(private_key.encode("utf-8"), password=None)
+        signature = key.sign(data.request.encode("utf-8"), padding.PKCS1v15(), hashes.SHA512())
+    except Exception as exc:
+        raise HTTPException(500, f"Nao foi possivel assinar requisicao QZ Tray: {exc}")
+    return {"signature": base64.b64encode(signature).decode("ascii")}
 
 
 @router.get("/admin/printing/jobs")

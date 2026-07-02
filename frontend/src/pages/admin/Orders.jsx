@@ -15,6 +15,7 @@ import {
 import { toast } from "sonner";
 import { useOrdersWS } from "@/hooks/useOrdersWS";
 import { useAuth } from "@/context/AuthContext";
+import { getQzPrintSettings, printQzText } from "@/lib/qzPrint";
 
 // ── Status config ──────────────────────────────────────────────────────────
 const COLUMNS = [
@@ -55,6 +56,13 @@ function browserPrintEnabled() {
 
 function browserPrintTrigger() {
   return localStorage.getItem(BROWSER_PRINT_TRIGGER_KEY) || "pending";
+}
+
+function activePrintSettings() {
+  const qz = getQzPrintSettings();
+  if (qz.enabled) return { mode: "qz", trigger: qz.trigger || "pending", qz };
+  if (browserPrintEnabled()) return { mode: "browser", trigger: browserPrintTrigger() };
+  return { mode: "off", trigger: "pending" };
 }
 
 function htmlEscape(value) {
@@ -521,6 +529,14 @@ export default function Orders() {
     localStorage.setItem(key, JSON.stringify(next));
   }, [user?.restaurant_id]);
 
+  const unmarkBrowserPrinted = useCallback((order) => {
+    if (!order?.id) return;
+    browserPrintedRef.current.delete(order.id);
+    const key = `eg_browser_printed:${user?.restaurant_id || "default"}`;
+    const saved = JSON.parse(localStorage.getItem(key) || "[]");
+    localStorage.setItem(key, JSON.stringify(saved.filter((id) => id !== order.id)));
+  }, [user?.restaurant_id]);
+
   const hasBrowserPrinted = useCallback((order) => {
     if (!order?.id) return true;
     if (browserPrintedRef.current.has(order.id)) return true;
@@ -535,13 +551,31 @@ export default function Orders() {
 
   const printBrowserOrderOnce = useCallback((order) => {
     if (!order || hasBrowserPrinted(order)) return;
-    printOrderInBrowser(order);
     markBrowserPrinted(order);
-  }, [hasBrowserPrinted, markBrowserPrinted]);
+    const settings = activePrintSettings();
+    if (settings.mode === "qz") {
+      const text = buildBrowserReceipt(order);
+      printQzText(text, settings.qz.printer)
+        .then(() => {
+          if (settings.qz.kitchenEnabled) {
+            return printQzText(text, settings.qz.kitchenPrinter || settings.qz.printer);
+          }
+          return null;
+        })
+        .catch((err) => {
+          unmarkBrowserPrinted(order);
+          const detail = err?.response?.data?.detail || err?.message || "QZ Tray nao conectado.";
+          toast.error(`Impressao QZ falhou: ${detail}`);
+        });
+      return;
+    }
+    printOrderInBrowser(order);
+  }, [hasBrowserPrinted, markBrowserPrinted, unmarkBrowserPrinted]);
 
   const processBrowserAutoPrint = useCallback((data = [], initial = false) => {
-    if (!browserPrintEnabled()) return;
-    const trigger = browserPrintTrigger();
+    const settings = activePrintSettings();
+    if (settings.mode === "off") return;
+    const trigger = settings.trigger;
     const candidates = data.filter((order) =>
       order.status === trigger && order.payment_status !== "awaiting"
     );
@@ -629,7 +663,8 @@ export default function Orders() {
   const updateStatus = async (id, status, extra = {}) => {
     await api.put(`/admin/orders/${id}/status`, { status, ...extra });
     toast.success(`Pedido → ${STATUS_LABEL[status]}`);
-    if (browserPrintEnabled() && browserPrintTrigger() === status) {
+    const settings = activePrintSettings();
+    if (settings.mode !== "off" && settings.trigger === status) {
       const order = orders.find((item) => item.id === id) || selected;
       if (order) printBrowserOrderOnce({ ...order, status });
     }

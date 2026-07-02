@@ -15,6 +15,7 @@ import ImageUpload from "@/components/admin/ImageUpload";
 import { Loader2, Save, Copy, Check, Printer, RefreshCw, KeyRound, Activity, Download, MonitorDown } from "lucide-react";
 import { API } from "@/lib/api";
 import { useBrand } from "@/context/BrandContext";
+import { getQzPrintSettings, listQzPrinters, printQzText, saveQzPrintSettings } from "@/lib/qzPrint";
 
 const PAYMENT_OPTIONS = ["Pix", "Dinheiro", "Cartão de crédito", "Cartão de débito", "Vale refeição"];
 
@@ -48,9 +49,6 @@ const PRINT_TRIGGER_LABELS = {
   ready: "Quando ficar pronto",
 };
 
-const BROWSER_PRINT_ENABLED_KEY = "eg_browser_print_enabled";
-const BROWSER_PRINT_TRIGGER_KEY = "eg_browser_print_trigger";
-
 export default function Settings() {
   const { brand } = useBrand();
   const [r, setR] = useState(null);
@@ -59,10 +57,10 @@ export default function Settings() {
   const [printJobs, setPrintJobs] = useState([]);
   const [savingPrinting, setSavingPrinting] = useState(false);
   const [downloadingPrintAgent, setDownloadingPrintAgent] = useState(false);
-  const [browserPrint, setBrowserPrint] = useState(() => ({
-    enabled: localStorage.getItem(BROWSER_PRINT_ENABLED_KEY) === "true",
-    trigger: localStorage.getItem(BROWSER_PRINT_TRIGGER_KEY) || "pending",
-  }));
+  const [qzPrint, setQzPrint] = useState(() => getQzPrintSettings());
+  const [qzPrinters, setQzPrinters] = useState([]);
+  const [qzStatus, setQzStatus] = useState("idle");
+  const [qzTesting, setQzTesting] = useState(false);
 
   useEffect(() => { api.get("/admin/restaurant").then((res) => setR(res.data)); }, []);
   useEffect(() => {
@@ -72,6 +70,7 @@ export default function Settings() {
 
   const set = (patch) => setR((p) => ({ ...p, ...patch }));
   const setPrint = (patch) => setPrinting((p) => ({ ...p, ...patch }));
+  const setQz = (patch) => setQzPrint((p) => ({ ...p, ...patch }));
 
   const save = async () => {
     setSaving(true);
@@ -119,8 +118,8 @@ export default function Settings() {
         printer_include_payment: !!printing.printer_include_payment,
       };
       const { data } = await api.put("/admin/printing/settings", payload);
-      localStorage.setItem(BROWSER_PRINT_ENABLED_KEY, browserPrint.enabled ? "true" : "false");
-      localStorage.setItem(BROWSER_PRINT_TRIGGER_KEY, browserPrint.trigger || "pending");
+      saveQzPrintSettings(qzPrint);
+      localStorage.setItem("eg_browser_print_enabled", "false");
       setPrinting(data);
       toast.success("Configurações de impressão salvas");
     } catch {
@@ -133,6 +132,41 @@ export default function Settings() {
   const refreshPrintJobs = async () => {
     const { data } = await api.get("/admin/printing/jobs");
     setPrintJobs(data);
+  };
+
+  const connectQz = async () => {
+    setQzStatus("connecting");
+    try {
+      const printers = await listQzPrinters();
+      setQzPrinters(printers || []);
+      setQzStatus("connected");
+      if (!qzPrint.printer && printers?.[0]) setQz({ printer: printers[0] });
+      toast.success("QZ Tray conectado");
+    } catch (err) {
+      setQzStatus("error");
+      const detail = err?.response?.data?.detail || err?.message || "Abra o QZ Tray neste computador e tente novamente.";
+      toast.error(detail);
+    }
+  };
+
+  const testQzPrint = async () => {
+    setQzTesting(true);
+    try {
+      await printQzText([
+        "EG Delivery",
+        "Teste de impressao QZ Tray",
+        new Date().toLocaleString("pt-BR"),
+        "--------------------------------",
+        "Se saiu na impressora, esta tudo certo.",
+        "",
+      ].join("\n"), qzPrint.printer);
+      toast.success("Teste enviado para a impressora");
+    } catch (err) {
+      const detail = err?.response?.data?.detail || err?.message || "Nao foi possivel imprimir pelo QZ Tray.";
+      toast.error(detail);
+    } finally {
+      setQzTesting(false);
+    }
   };
 
   const regeneratePrintToken = async () => {
@@ -468,56 +502,146 @@ export default function Settings() {
 
         {/* Impressão */}
         <TabsContent value="impressao" className="space-y-4">
-          <div className={`${PANEL} space-y-4 border-emerald-200 dark:border-emerald-900`}>
+          <div className={`${PANEL} space-y-5 border-emerald-200 dark:border-emerald-900`}>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="flex items-center gap-2">
                 <span className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 grid place-items-center">
                   <Printer className="w-5 h-5" />
                 </span>
                 <div>
-                  <h2 className="font-display font-bold text-lg dark:text-white">Impressao pelo navegador</h2>
+                  <h2 className="font-display font-bold text-lg dark:text-white">QZ Tray</h2>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Sem app instalado. Funciona neste computador enquanto o painel de pedidos estiver aberto.
+                    Reconhece as impressoras instaladas neste computador e imprime direto pelo painel.
                   </p>
                 </div>
               </div>
               <label className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3">
                 <Switch
-                  checked={!!browserPrint.enabled}
-                  onCheckedChange={(v) => setBrowserPrint((p) => ({ ...p, enabled: v }))}
+                  checked={!!qzPrint.enabled}
+                  onCheckedChange={(v) => setQz({ enabled: v })}
                 />
                 <span>
                   <span className="block text-sm font-semibold dark:text-white">Ativar neste computador</span>
-                  <span className="block text-xs text-gray-500 dark:text-gray-400">Usa a impressao do navegador</span>
+                  <span className="block text-xs text-gray-500 dark:text-gray-400">Usa o QZ Tray aberto no Windows</span>
                 </span>
               </label>
             </div>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <Label className="dark:text-gray-200">Quando imprimir pelo navegador</Label>
-                <Select
-                  value={browserPrint.trigger || "pending"}
-                  onValueChange={(v) => setBrowserPrint((p) => ({ ...p, trigger: v }))}
-                >
-                  <SelectTrigger className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
-                    <SelectItem value="pending">Automatico, quando o pedido entrar</SelectItem>
-                    <SelectItem value="accepted">Somente apos aceitar o pedido</SelectItem>
-                  </SelectContent>
-                </Select>
+
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-3">
+              <Button type="button" variant="outline" onClick={connectQz} disabled={qzStatus === "connecting"} className="dark:border-gray-600 dark:text-gray-200">
+                {qzStatus === "connecting" ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1" />}
+                Reconhecer impressoras
+              </Button>
+              <span className={`text-sm font-medium ${
+                qzStatus === "connected" ? "text-emerald-600 dark:text-emerald-400" :
+                qzStatus === "error" ? "text-red-600 dark:text-red-400" :
+                "text-gray-500 dark:text-gray-400"
+              }`}>
+                {qzStatus === "connected" ? `${qzPrinters.length} impressora(s) encontrada(s)` :
+                 qzStatus === "error" ? "QZ Tray nao conectado" :
+                 "Abra o QZ Tray e clique para buscar as impressoras"}
+              </span>
+            </div>
+
+            <div className="grid lg:grid-cols-2 gap-4">
+              <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-4">
+                <div>
+                  <h3 className="font-semibold dark:text-white">Impressao geral</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Recibo completo do pedido para atendimento ou caixa.</p>
+                </div>
+                <div>
+                  <Label className="dark:text-gray-200">Impressora</Label>
+                  <Select value={qzPrint.printer || ""} onValueChange={(v) => setQz({ printer: v })}>
+                    <SelectTrigger className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white">
+                      <SelectValue placeholder="Reconheca e selecione a impressora" />
+                    </SelectTrigger>
+                    <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
+                      {qzPrint.printer && !qzPrinters.includes(qzPrint.printer) && (
+                        <SelectItem value={qzPrint.printer}>{qzPrint.printer}</SelectItem>
+                      )}
+                      {qzPrinters.map((printer) => (
+                        <SelectItem key={printer} value={printer}>{printer}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="dark:text-gray-200">Quando imprimir</Label>
+                  <div className="grid sm:grid-cols-2 gap-2 mt-2">
+                    {[
+                      ["pending", "Automatico", "Quando o pedido entrar"],
+                      ["accepted", "Apos aceitar", "Quando o pedido for aceito"],
+                    ].map(([value, title, desc]) => (
+                      <label key={value} className={`flex items-start gap-3 rounded-xl border px-3 py-3 cursor-pointer transition-colors ${
+                        qzPrint.trigger === value
+                          ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30"
+                          : "border-gray-200 dark:border-gray-700"
+                      }`}>
+                        <input
+                          type="checkbox"
+                          checked={qzPrint.trigger === value}
+                          onChange={() => setQz({ trigger: value })}
+                          className="mt-0.5 h-4 w-4 accent-emerald-600"
+                        />
+                        <span>
+                          <span className="block text-sm font-semibold dark:text-white">{title}</span>
+                          <span className="block text-xs text-gray-500 dark:text-gray-400">{desc}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <div className="rounded-xl bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 p-3">
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  O navegador usa a impressora padrao ou abre o dialogo de impressao. Para imprimir sem dialogo, configure o Chrome/Windows em modo kiosk ou impressora padrao.
-                </p>
+
+              <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold dark:text-white">Cozinha</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Copia opcional para preparo, podendo usar outra impressora.</p>
+                  </div>
+                  <Switch checked={!!qzPrint.kitchenEnabled} onCheckedChange={(v) => setQz({ kitchenEnabled: v })} />
+                </div>
+                <div>
+                  <Label className="dark:text-gray-200">Impressora da cozinha</Label>
+                  <Select value={qzPrint.kitchenPrinter || qzPrint.printer || ""} onValueChange={(v) => setQz({ kitchenPrinter: v })}>
+                    <SelectTrigger className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white">
+                      <SelectValue placeholder="Use a mesma ou escolha outra" />
+                    </SelectTrigger>
+                    <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
+                      {qzPrint.kitchenPrinter && !qzPrinters.includes(qzPrint.kitchenPrinter) && qzPrint.kitchenPrinter !== qzPrint.printer && (
+                        <SelectItem value={qzPrint.kitchenPrinter}>{qzPrint.kitchenPrinter}</SelectItem>
+                      )}
+                      {qzPrinters.map((printer) => (
+                        <SelectItem key={printer} value={printer}>{printer}</SelectItem>
+                      ))}
+                      {qzPrint.printer && !qzPrinters.includes(qzPrint.printer) && (
+                        <SelectItem value={qzPrint.printer}>{qzPrint.printer}</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="rounded-xl bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 p-3">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Se ativar cozinha, o pedido sai na impressora geral e tambem na impressora da cozinha.
+                  </p>
+                </div>
               </div>
             </div>
-            <div className="flex justify-end">
-              <Button onClick={savePrinting} disabled={savingPrinting} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl">
-                {savingPrinting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-1" /> Salvar impressao pelo navegador</>}
+
+            <div className="grid md:grid-cols-2 gap-3">
+              <Button type="button" onClick={testQzPrint} disabled={qzTesting || !qzPrint.enabled} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl disabled:opacity-70">
+                {qzTesting ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Printer className="w-4 h-4 mr-1" />}
+                Testar impressao QZ
               </Button>
+              <Button onClick={savePrinting} disabled={savingPrinting} className="bg-gray-900 dark:bg-white dark:text-gray-900 hover:opacity-90 rounded-xl">
+                {savingPrinting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-1" /> Salvar QZ Tray</>}
+              </Button>
+            </div>
+
+            <div className="rounded-xl bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 p-3">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Para imprimir sem janela do navegador, mantenha o QZ Tray instalado e aberto no computador da loja. A assinatura segura vem do servidor.
+              </p>
             </div>
           </div>
 
@@ -525,13 +649,13 @@ export default function Settings() {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 grid place-items-center">
-                    <Printer className="w-5 h-5" />
+                  <span className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 grid place-items-center">
+                    <MonitorDown className="w-5 h-5" />
                   </span>
                   <div>
-                    <h2 className="font-display font-bold text-lg dark:text-white">Impressão automática de pedidos</h2>
+                    <h2 className="font-display font-bold text-lg dark:text-white">Alternativa: programa local antigo</h2>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Cria uma fila segura quando o pedido chega no status escolhido. O agente local imprime sem cliques.
+                      Mantido como plano B para lojas que ainda usam o app por token.
                     </p>
                   </div>
                 </div>
@@ -539,8 +663,8 @@ export default function Settings() {
               <label className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3">
                 <Switch checked={!!printing.printing_enabled} onCheckedChange={(v) => setPrint({ printing_enabled: v })} />
                 <span>
-                  <span className="block text-sm font-semibold dark:text-white">Ativar automação</span>
-                  <span className="block text-xs text-gray-500 dark:text-gray-400">Usa impressora configurada no agente</span>
+                  <span className="block text-sm font-semibold dark:text-white">Ativar app antigo</span>
+                  <span className="block text-xs text-gray-500 dark:text-gray-400">Usa fila/token do agente local</span>
                 </span>
               </label>
             </div>
