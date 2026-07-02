@@ -15,7 +15,7 @@ import {
 import { toast } from "sonner";
 import { useOrdersWS } from "@/hooks/useOrdersWS";
 import { useAuth } from "@/context/AuthContext";
-import { getQzPrintSettings, printQzText } from "@/lib/qzPrint";
+import { printOrderOnce } from "@/lib/orderAutoPrint";
 
 // ── Status config ──────────────────────────────────────────────────────────
 const COLUMNS = [
@@ -46,90 +46,6 @@ const ORDER_SOUND = {
   new: "/sounds/new-order.wav",
   cancel: "/sounds/cancel-order.wav",
 };
-
-const BROWSER_PRINT_ENABLED_KEY = "eg_browser_print_enabled";
-const BROWSER_PRINT_TRIGGER_KEY = "eg_browser_print_trigger";
-
-function browserPrintEnabled() {
-  return localStorage.getItem(BROWSER_PRINT_ENABLED_KEY) === "true";
-}
-
-function browserPrintTrigger() {
-  return localStorage.getItem(BROWSER_PRINT_TRIGGER_KEY) || "pending";
-}
-
-function activePrintSettings() {
-  const qz = getQzPrintSettings();
-  if (qz.enabled) return { mode: "qz", trigger: qz.trigger || "pending", qz };
-  if (browserPrintEnabled()) return { mode: "browser", trigger: browserPrintTrigger() };
-  return { mode: "off", trigger: "pending" };
-}
-
-function htmlEscape(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function buildBrowserReceipt(order) {
-  const customer = order.customer || {};
-  const address = order.address || {};
-  const lines = [
-    `PEDIDO #${order.order_number || ""}`,
-    shortDateTime(order.created_at),
-    "--------------------------------",
-    `Cliente: ${customer.name || "Cliente"}`,
-  ];
-  if (customer.phone) lines.push(`Telefone: ${customer.phone}`);
-  lines.push(`Tipo: ${orderTypeLabel(order)}`);
-  if (address.street) {
-    lines.push(`Endereco: ${address.street}, ${address.number || ""}`);
-    if (address.neighborhood) lines.push(`Bairro: ${address.neighborhood}`);
-    if (address.complement) lines.push(`Compl.: ${address.complement}`);
-    if (address.reference) lines.push(`Ref.: ${address.reference}`);
-  }
-  lines.push("--------------------------------", "ITENS");
-  (order.items || []).forEach((item) => {
-    lines.push(`${item.quantity || 1}x ${item.product_name || "Produto"}`);
-    (item.options || []).forEach((option) => lines.push(`  + ${option.name || option}`));
-    if (item.notes) lines.push(`  Obs: ${item.notes}`);
-    lines.push(`  ${brl(item.total_price || 0)}`);
-  });
-  lines.push(
-    "--------------------------------",
-    `Subtotal: ${brl(order.subtotal || 0)}`,
-    `Entrega:  ${brl(order.delivery_fee || 0)}`
-  );
-  if (order.discount > 0) lines.push(`Desconto: -${brl(order.discount)}`);
-  lines.push(`TOTAL:    ${brl(order.total || 0)}`);
-  if (order.payment_method) lines.push(`Pagamento: ${order.payment_method}`);
-  if (order.customer_notes) lines.push("--------------------------------", `Obs: ${order.customer_notes}`);
-  return lines.join("\n");
-}
-
-function printOrderInBrowser(order) {
-  const frame = document.createElement("iframe");
-  frame.style.position = "fixed";
-  frame.style.right = "0";
-  frame.style.bottom = "0";
-  frame.style.width = "0";
-  frame.style.height = "0";
-  frame.style.border = "0";
-  document.body.appendChild(frame);
-  const doc = frame.contentWindow.document;
-  doc.open();
-  doc.write(`<!doctype html><html><head><meta charset="utf-8"><title>Pedido ${htmlEscape(order.order_number || "")}</title>
-    <style>body{font-family:Consolas,monospace;font-size:13px;margin:0;padding:12px;color:#000}pre{white-space:pre-wrap;margin:0}</style>
-    </head><body><pre>${htmlEscape(buildBrowserReceipt(order))}</pre></body></html>`);
-  doc.close();
-  setTimeout(() => {
-    frame.contentWindow.focus();
-    frame.contentWindow.print();
-    setTimeout(() => frame.remove(), 1500);
-  }, 250);
-}
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function timeSince(iso) {
@@ -514,77 +430,9 @@ export default function Orders() {
   const [collapsed, setCollapsed] = useState({});
   const prevPendingCount = useRef(0);
   const prevCancelCount = useRef(-1);
-  const browserAutoReadyRef = useRef(false);
-  const browserPrintedRef = useRef(new Set());
 
   // Auth context para pegar token e restaurant_id
   const { user, token } = useAuth();
-
-  const markBrowserPrinted = useCallback((order) => {
-    if (!order?.id) return;
-    browserPrintedRef.current.add(order.id);
-    const key = `eg_browser_printed:${user?.restaurant_id || "default"}`;
-    const saved = JSON.parse(localStorage.getItem(key) || "[]");
-    const next = [order.id, ...saved.filter((id) => id !== order.id)].slice(0, 300);
-    localStorage.setItem(key, JSON.stringify(next));
-  }, [user?.restaurant_id]);
-
-  const unmarkBrowserPrinted = useCallback((order) => {
-    if (!order?.id) return;
-    browserPrintedRef.current.delete(order.id);
-    const key = `eg_browser_printed:${user?.restaurant_id || "default"}`;
-    const saved = JSON.parse(localStorage.getItem(key) || "[]");
-    localStorage.setItem(key, JSON.stringify(saved.filter((id) => id !== order.id)));
-  }, [user?.restaurant_id]);
-
-  const hasBrowserPrinted = useCallback((order) => {
-    if (!order?.id) return true;
-    if (browserPrintedRef.current.has(order.id)) return true;
-    const key = `eg_browser_printed:${user?.restaurant_id || "default"}`;
-    const saved = JSON.parse(localStorage.getItem(key) || "[]");
-    if (saved.includes(order.id)) {
-      browserPrintedRef.current.add(order.id);
-      return true;
-    }
-    return false;
-  }, [user?.restaurant_id]);
-
-  const printBrowserOrderOnce = useCallback((order) => {
-    if (!order || hasBrowserPrinted(order)) return;
-    markBrowserPrinted(order);
-    const settings = activePrintSettings();
-    if (settings.mode === "qz") {
-      const text = buildBrowserReceipt(order);
-      printQzText(text, settings.qz.printer)
-        .then(() => {
-          if (settings.qz.kitchenEnabled) {
-            return printQzText(text, settings.qz.kitchenPrinter || settings.qz.printer);
-          }
-          return null;
-        })
-        .catch((err) => {
-          unmarkBrowserPrinted(order);
-          const detail = err?.response?.data?.detail || err?.message || "QZ Tray nao conectado.";
-          toast.error(`Impressao QZ falhou: ${detail}`);
-        });
-      return;
-    }
-    printOrderInBrowser(order);
-  }, [hasBrowserPrinted, markBrowserPrinted, unmarkBrowserPrinted]);
-
-  const processBrowserAutoPrint = useCallback((data = [], initial = false) => {
-    const settings = activePrintSettings();
-    if (settings.mode === "off") return;
-    const trigger = settings.trigger;
-    const candidates = data.filter((order) =>
-      order.status === trigger && order.payment_status !== "awaiting"
-    );
-    if (initial) {
-      candidates.forEach((order) => browserPrintedRef.current.add(order.id));
-      return;
-    }
-    candidates.forEach(printBrowserOrderOnce);
-  }, [printBrowserOrderOnce]);
 
   // Toca os alertas configurados em public/sounds.
   const playOrderSound = useCallback((type = "new") => {
@@ -610,8 +458,6 @@ export default function Orders() {
       setSummary(summaryRes.data || null);
       setCycles(cyclesRes.data || []);
       setDeliveryPeople(deliveryRes.data || []);
-      processBrowserAutoPrint(data, !browserAutoReadyRef.current);
-      browserAutoReadyRef.current = true;
 
       // Novo pedido — exclui os que estao aguardando Pix (ainda nao foram pagos)
       const pendingNow = data.filter(
@@ -634,7 +480,7 @@ export default function Orders() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [cycleMode, statusFilter, sourceFilter, paymentFilter, dateFrom, dateTo, playOrderSound, processBrowserAutoPrint]);
+  }, [cycleMode, statusFilter, sourceFilter, paymentFilter, dateFrom, dateTo, playOrderSound]);
 
   // WebSocket para tempo real — substitui a maior parte do polling
   useOrdersWS({
@@ -663,11 +509,8 @@ export default function Orders() {
   const updateStatus = async (id, status, extra = {}) => {
     await api.put(`/admin/orders/${id}/status`, { status, ...extra });
     toast.success(`Pedido → ${STATUS_LABEL[status]}`);
-    const settings = activePrintSettings();
-    if (settings.mode !== "off" && settings.trigger === status) {
-      const order = orders.find((item) => item.id === id) || selected;
-      if (order) printBrowserOrderOnce({ ...order, status });
-    }
+    const order = orders.find((item) => item.id === id) || selected;
+    if (order) printOrderOnce({ ...order, status }, user?.restaurant_id);
     load(true);
     if (selected?.id === id) setSelected((s) => s && { ...s, status });
   };
