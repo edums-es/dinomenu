@@ -181,7 +181,7 @@ function OrderCard({ order, onSelect, onStatusChange }) {
 function KanbanColumn({ col, orders, onSelect, onStatusChange, collapsed, onToggle }) {
   const count = orders.length;
   return (
-    <div className={`flex flex-col min-w-[260px] max-w-[280px] transition-all ${collapsed ? "min-w-[48px] max-w-[48px]" : ""}`}>
+    <div className={`flex flex-col shrink-0 min-w-[260px] max-w-[280px] transition-all ${collapsed ? "min-w-[48px] max-w-[48px]" : ""}`}>
       {/* Column header */}
       <button onClick={onToggle}
         className="flex items-center gap-2 px-3 py-2 rounded-xl mb-2 w-full text-left"
@@ -753,18 +753,20 @@ export default function Orders() {
         </div>
       ) : view === "kanban" ? (
         /* ── KANBAN VIEW ── */
-        <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-          {COLUMNS.map((col) => (
-            <KanbanColumn
-              key={col.key}
-              col={col}
-              orders={byStatus[col.key] || []}
-              onSelect={setSelected}
-              onStatusChange={requestStatusChange}
-              collapsed={!!collapsed[col.key]}
-              onToggle={() => toggleCollapse(col.key)}
-            />
-          ))}
+        <div className="w-full max-w-full overflow-x-auto overflow-y-hidden pb-4">
+          <div className="flex w-max min-w-full gap-4 pr-4">
+            {COLUMNS.map((col) => (
+              <KanbanColumn
+                key={col.key}
+                col={col}
+                orders={byStatus[col.key] || []}
+                onSelect={setSelected}
+                onStatusChange={requestStatusChange}
+                collapsed={!!collapsed[col.key]}
+                onToggle={() => toggleCollapse(col.key)}
+              />
+            ))}
+          </div>
         </div>
       ) : (
         /* ── LIST VIEW ── */
