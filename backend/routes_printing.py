@@ -94,6 +94,63 @@ def _read_env_or_file(value_key: str, path_key: str) -> Optional[str]:
     return None
 
 
+def _generate_qz_material() -> dict:
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    subject = issuer = x509.Name([
+        x509.NameAttribute(NameOID.COUNTRY_NAME, "BR"),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "EG Delivery"),
+        x509.NameAttribute(NameOID.COMMON_NAME, "EG Delivery QZ Tray"),
+    ])
+    certificate = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.now(timezone.utc) - timedelta(days=1))
+        .not_valid_after(datetime.now(timezone.utc) + timedelta(days=3650))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .sign(key, hashes.SHA256())
+    )
+    return {
+        "certificate": certificate.public_bytes(serialization.Encoding.PEM).decode("utf-8"),
+        "private_key": key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        ).decode("utf-8"),
+    }
+
+
+async def _get_qz_material() -> dict:
+    env_certificate = _read_env_or_file("QZ_CERTIFICATE", "QZ_CERTIFICATE_PATH")
+    env_private_key = _read_env_or_file("QZ_PRIVATE_KEY", "QZ_PRIVATE_KEY_PATH")
+    if env_certificate and env_private_key:
+        return {"certificate": env_certificate, "private_key": env_private_key}
+    if env_certificate or env_private_key:
+        raise HTTPException(
+            503,
+            "QZ Tray parcialmente configurado. Defina certificado e chave privada juntos.",
+        )
+
+    stored = await db.platform_settings.find_one({"_id": "qz_tray"}, {"_id": 0})
+    if stored and stored.get("certificate") and stored.get("private_key"):
+        return {"certificate": stored["certificate"], "private_key": stored["private_key"]}
+
+    generated = _generate_qz_material()
+    await db.platform_settings.update_one(
+        {"_id": "qz_tray"},
+        {"$set": {**generated, "created_at": now_iso(), "updated_at": now_iso()}},
+        upsert=True,
+    )
+    return generated
+
+
 def _money(value) -> str:
     try:
         return f"R$ {float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -274,23 +331,13 @@ async def regenerate_printing_token(user=Depends(require_restaurant)):
 
 @router.get("/admin/printing/qz/certificate", response_class=PlainTextResponse)
 async def get_qz_certificate(user=Depends(require_restaurant)):
-    certificate = _read_env_or_file("QZ_CERTIFICATE", "QZ_CERTIFICATE_PATH")
-    if not certificate:
-        raise HTTPException(
-            503,
-            "Certificado do QZ Tray nao configurado no servidor. Configure QZ_CERTIFICATE ou QZ_CERTIFICATE_PATH.",
-        )
-    return certificate
+    material = await _get_qz_material()
+    return material["certificate"]
 
 
 @router.post("/admin/printing/qz/signature")
 async def sign_qz_request(data: QzSignatureIn, user=Depends(require_restaurant)):
-    private_key = _read_env_or_file("QZ_PRIVATE_KEY", "QZ_PRIVATE_KEY_PATH")
-    if not private_key:
-        raise HTTPException(
-            503,
-            "Chave privada do QZ Tray nao configurada no servidor. Configure QZ_PRIVATE_KEY ou QZ_PRIVATE_KEY_PATH.",
-        )
+    material = await _get_qz_material()
     try:
         import base64
         from cryptography.hazmat.primitives import hashes, serialization
@@ -299,7 +346,7 @@ async def sign_qz_request(data: QzSignatureIn, user=Depends(require_restaurant))
         raise HTTPException(500, f"Biblioteca de assinatura indisponivel: {exc}")
 
     try:
-        key = serialization.load_pem_private_key(private_key.encode("utf-8"), password=None)
+        key = serialization.load_pem_private_key(material["private_key"].encode("utf-8"), password=None)
         signature = key.sign(data.request.encode("utf-8"), padding.PKCS1v15(), hashes.SHA512())
     except Exception as exc:
         raise HTTPException(500, f"Nao foi possivel assinar requisicao QZ Tray: {exc}")
