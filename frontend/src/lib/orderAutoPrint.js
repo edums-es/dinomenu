@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { brl } from "@/lib/format";
-import { getQzPrintSettings, printQzText } from "@/lib/qzPrint";
+import { getQzPrintSettings, printQzReceipt } from "@/lib/qzPrint";
 
 const BROWSER_PRINT_ENABLED_KEY = "eg_browser_print_enabled";
 const BROWSER_PRINT_TRIGGER_KEY = "eg_browser_print_trigger";
@@ -140,9 +140,9 @@ export async function printOrderOnce(order, restaurantId, settings = activePrint
   if (settings.mode === "qz") {
     const text = buildAutoPrintReceipt(order);
     try {
-      await printQzText(text, settings.qz.printer);
+      await printQzReceipt(text, settings.qz.printer);
       if (settings.qz.kitchenEnabled) {
-        await printQzText(text, settings.qz.kitchenPrinter || settings.qz.printer);
+        await printQzReceipt(text, settings.qz.kitchenPrinter || settings.qz.printer);
       }
     } catch (err) {
       unmarkAutoPrinted(order, restaurantId);

@@ -88,8 +88,73 @@ export async function listQzPrinters() {
   return qz.printers.find();
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function looksLikeThermalPrinter(printerName) {
+  const name = String(printerName || "").toLowerCase();
+  return [
+    "80mm",
+    "58mm",
+    "bematech",
+    "comanda",
+    "cupom",
+    "epson tm",
+    "elgin",
+    "esc/pos",
+    "gprinter",
+    "pos",
+    "receipt",
+    "termica",
+    "thermal",
+    "tm-t",
+    "xprinter",
+  ].some((part) => name.includes(part));
+}
+
 export async function printQzText(text, printerName) {
   const qz = await connectQzTray();
   const config = qz.configs.create(printerName || undefined, { encoding: "UTF-8" });
   return qz.print(config, [{ type: "raw", format: "plain", data: text }]);
+}
+
+export async function printQzReceipt(text, printerName) {
+  if (looksLikeThermalPrinter(printerName)) {
+    return printQzText(text, printerName);
+  }
+
+  const qz = await connectQzTray();
+  const config = qz.configs.create(printerName || undefined, {
+    units: "mm",
+    margins: { top: 5, right: 5, bottom: 5, left: 5 },
+  });
+  const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <style>
+      @page { margin: 5mm; }
+      body {
+        margin: 0;
+        color: #000;
+        background: #fff;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+    </style>
+  </head>
+  <body><pre>${escapeHtml(text)}</pre></body>
+</html>`;
+  return qz.print(config, [{ type: "pixel", format: "html", flavor: "plain", data: html }]);
 }

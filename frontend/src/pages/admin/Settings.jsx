@@ -14,7 +14,7 @@ import {
 import ImageUpload from "@/components/admin/ImageUpload";
 import { Loader2, Save, Copy, Check, Printer, RefreshCw, Activity, Download, MonitorDown } from "lucide-react";
 import { API } from "@/lib/api";
-import { getQzPrintSettings, listQzPrinters, printQzText, saveQzPrintSettings } from "@/lib/qzPrint";
+import { getQzPrintSettings, listQzPrinters, printQzReceipt, saveQzPrintSettings } from "@/lib/qzPrint";
 
 const PAYMENT_OPTIONS = ["Pix", "Dinheiro", "Cartão de crédito", "Cartão de débito", "Vale refeição"];
 
@@ -141,7 +141,7 @@ export default function Settings() {
   const testQzPrint = async () => {
     setQzTesting(true);
     try {
-      await printQzText([
+      await printQzReceipt([
         "EG Delivery",
         "Teste de impressao QZ Tray",
         new Date().toLocaleString("pt-BR"),
