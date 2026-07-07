@@ -527,7 +527,12 @@ async def download_print_agent(user=Depends(require_restaurant)):
     return FileResponse(
         setup_exe,
         media_type="application/octet-stream",
-        filename="EG Delivery Impressora Setup.exe",
+        filename=setup_exe.name,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
     )
 
 

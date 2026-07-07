@@ -156,14 +156,17 @@ export default function Settings() {
   const downloadPrintAgent = async () => {
     setAgentDownloading(true);
     try {
-      const { data } = await api.get("/admin/printing/agent/download", {
+      const { data, headers } = await api.get(`/admin/printing/agent/download?t=${Date.now()}`, {
         responseType: "blob",
         skipCache: true,
       });
+      const disposition = headers?.["content-disposition"] || "";
+      const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
+      const filename = match ? decodeURIComponent(match[1].replace(/"/g, "")) : "EG Delivery Impressora Setup 1.1.2.exe";
       const url = URL.createObjectURL(new Blob([data], { type: "application/octet-stream" }));
       const link = document.createElement("a");
       link.href = url;
-      link.download = "EG Delivery Impressora Setup.exe";
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
       link.remove();
