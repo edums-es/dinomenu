@@ -52,6 +52,8 @@ export default function Settings() {
   const [qzStatus, setQzStatus] = useState("idle");
   const [qzTesting, setQzTesting] = useState(false);
   const [qzTrustDownloading, setQzTrustDownloading] = useState(false);
+  const [agentDownloading, setAgentDownloading] = useState(false);
+  const [regeneratingToken, setRegeneratingToken] = useState(false);
 
   useEffect(() => { api.get("/admin/restaurant").then((res) => setR(res.data)); }, []);
   useEffect(() => {
@@ -61,6 +63,7 @@ export default function Settings() {
 
   const set = (patch) => setR((p) => ({ ...p, ...patch }));
   const setQz = (patch) => setQzPrint((p) => ({ ...p, ...patch }));
+  const setPrint = (patch) => setPrinting((p) => ({ ...p, ...patch }));
 
   const save = async () => {
     setSaving(true);
@@ -122,6 +125,74 @@ export default function Settings() {
   const refreshPrintJobs = async () => {
     const { data } = await api.get("/admin/printing/jobs");
     setPrintJobs(data);
+  };
+
+  const saveAgentPrinting = async () => {
+    setSavingPrinting(true);
+    try {
+      const payload = {
+        printing_enabled: !!printing.printing_enabled,
+        printing_trigger_status: printing.printing_trigger_status || "accepted",
+        printer_name: printing.printer_name || "",
+        printer_copies: Number(printing.printer_copies) || 1,
+        printer_include_customer_phone: !!printing.printer_include_customer_phone,
+        printer_include_address: !!printing.printer_include_address,
+        printer_include_payment: !!printing.printer_include_payment,
+      };
+      const { data } = await api.put("/admin/printing/settings", payload);
+      const disabledQz = { ...qzPrint, enabled: false };
+      saveQzPrintSettings(disabledQz);
+      setQzPrint(disabledQz);
+      localStorage.setItem("eg_browser_print_enabled", "false");
+      setPrinting(data);
+      toast.success(payload.printing_enabled ? "App proprio de impressao ativado" : "App proprio de impressao desativado");
+    } catch {
+      toast.error("Erro ao salvar app proprio");
+    } finally {
+      setSavingPrinting(false);
+    }
+  };
+
+  const downloadPrintAgent = async () => {
+    setAgentDownloading(true);
+    try {
+      const { data } = await api.get("/admin/printing/agent/download", {
+        responseType: "blob",
+        skipCache: true,
+      });
+      const url = URL.createObjectURL(new Blob([data], { type: "application/zip" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "eg-delivery-impressora-windows.zip";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Instalador do app proprio baixado");
+    } catch (err) {
+      const detail = err?.response?.data?.detail || err?.message || "Nao foi possivel baixar o app de impressao.";
+      toast.error(detail);
+    } finally {
+      setAgentDownloading(false);
+    }
+  };
+
+  const regeneratePrintToken = async () => {
+    setRegeneratingToken(true);
+    try {
+      const { data } = await api.post("/admin/printing/token");
+      setPrint({ printer_agent_token: data.printer_agent_token });
+      toast.success("Token novo gerado");
+    } catch {
+      toast.error("Nao foi possivel gerar token novo");
+    } finally {
+      setRegeneratingToken(false);
+    }
+  };
+
+  const copyText = async (value, label = "Copiado") => {
+    await navigator.clipboard.writeText(value || "");
+    toast.success(label);
   };
 
   const connectQz = async () => {
@@ -463,6 +534,107 @@ export default function Settings() {
 
         {/* Impressão */}
         <TabsContent value="impressao" className="space-y-4">
+          <div className={`${PANEL} space-y-5 border-sky-200 dark:border-sky-900`}>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <span className="w-10 h-10 rounded-xl bg-sky-100 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 grid place-items-center">
+                  <MonitorDown className="w-5 h-5" />
+                </span>
+                <div>
+                  <h2 className="font-display font-bold text-lg dark:text-white">App proprio EG Delivery</h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Alternativa sem QZ: instala um app local, cola o token da loja e imprime pela fila segura do servidor.
+                  </p>
+                </div>
+              </div>
+              <label className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3">
+                <Switch checked={!!printing.printing_enabled} onCheckedChange={(v) => setPrint({ printing_enabled: v })} />
+                <span>
+                  <span className="block text-sm font-semibold dark:text-white">Ativar app proprio</span>
+                  <span className="block text-xs text-gray-500 dark:text-gray-400">Usa o programa EG Delivery no Windows</span>
+                </span>
+              </label>
+            </div>
+
+            <div className="grid lg:grid-cols-3 gap-3">
+              <div>
+                <Label className="dark:text-gray-200">Quando imprimir</Label>
+                <Select value={printing.printing_trigger_status || "accepted"} onValueChange={(v) => setPrint({ printing_trigger_status: v })}>
+                  <SelectTrigger className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="dark:bg-gray-800 dark:border-gray-700">
+                    <SelectItem value="pending">Automatico, quando o pedido entrar</SelectItem>
+                    <SelectItem value="accepted">Depois que aceitar o pedido</SelectItem>
+                    <SelectItem value="preparing">Quando entrar em preparo</SelectItem>
+                    <SelectItem value="ready">Quando ficar pronto</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="dark:text-gray-200">Nome da impressora</Label>
+                <Input value={printing.printer_name || ""} onChange={(e) => setPrint({ printer_name: e.target.value })} placeholder="Vazio usa a padrao do Windows" className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
+              </div>
+              <div>
+                <Label className="dark:text-gray-200">Copias</Label>
+                <Input type="number" min="1" max="5" value={printing.printer_copies || 1} onChange={(e) => setPrint({ printer_copies: e.target.value })} className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-3">
+              {[
+                ["printer_include_customer_phone", "Telefone do cliente"],
+                ["printer_include_address", "Endereco de entrega"],
+                ["printer_include_payment", "Forma de pagamento"],
+              ].map(([key, label]) => (
+                <label key={key} className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3">
+                  <span className="text-sm font-semibold dark:text-white">{label}</span>
+                  <Switch checked={!!printing[key]} onCheckedChange={(v) => setPrint({ [key]: v })} />
+                </label>
+              ))}
+            </div>
+
+            <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 p-4 space-y-3">
+              <h3 className="font-semibold dark:text-white">Vinculo manual do app</h3>
+              <div className="grid lg:grid-cols-2 gap-3">
+                <div>
+                  <Label className="dark:text-gray-200">URL/API</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Input value={API} readOnly className="font-mono text-xs dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
+                    <Button type="button" variant="outline" onClick={() => copyText(API, "URL/API copiada")} className="dark:border-gray-600 dark:text-gray-200">
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+                <div>
+                  <Label className="dark:text-gray-200">Token da loja</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Input value={printing.printer_agent_token || ""} readOnly className="font-mono text-xs dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
+                    <Button type="button" variant="outline" onClick={() => copyText(printing.printer_agent_token || "", "Token copiado")} className="dark:border-gray-600 dark:text-gray-200">
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                    <Button type="button" variant="outline" onClick={regeneratePrintToken} disabled={regeneratingToken} className="dark:border-gray-600 dark:text-gray-200">
+                      {regeneratingToken ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                No app do Windows, cole exatamente esta URL/API e este token. Isso remove a dependencia do QZ.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-3">
+              <Button type="button" onClick={downloadPrintAgent} disabled={agentDownloading} className="bg-sky-600 hover:bg-sky-700 text-white rounded-xl">
+                {agentDownloading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Download className="w-4 h-4 mr-1" />}
+                Baixar app proprio Windows
+              </Button>
+              <Button type="button" onClick={saveAgentPrinting} disabled={savingPrinting} className="bg-gray-900 dark:bg-white dark:text-gray-900 hover:opacity-90 rounded-xl">
+                {savingPrinting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4 mr-1" /> Salvar app proprio</>}
+              </Button>
+            </div>
+          </div>
+
           <div className={`${PANEL} space-y-5 border-emerald-200 dark:border-emerald-900`}>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="flex items-center gap-2">
