@@ -8,8 +8,8 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import PlainTextResponse, StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 
 from auth import require_restaurant
@@ -45,11 +45,15 @@ def _find_windows_setup() -> Optional[Path]:
         Path.cwd() / "installers",
         Path.cwd() / "dist",
     ]
-    matches = []
+    preferred_matches = []
+    legacy_matches = []
     for folder in candidates:
         if folder.exists():
-            matches.extend(folder.glob("Dino Menu Impressora Setup*.exe"))
-    matches = [p for p in matches if p.exists()]
+            preferred_matches.extend(folder.glob("EG Delivery Impressora Setup*.exe"))
+            legacy_matches.extend(folder.glob("Dino Menu Impressora Setup*.exe"))
+    matches = [p for p in preferred_matches if p.exists()]
+    if not matches:
+        matches = [p for p in legacy_matches if p.exists()]
     if not matches:
         return None
     return sorted(matches, key=lambda p: p.stat().st_mtime, reverse=True)[0]
@@ -73,6 +77,10 @@ class AgentClaimIn(BaseModel):
     token: str
     agent_id: Optional[str] = "eg-print-agent"
     limit: int = 5
+
+
+class AgentValidateIn(BaseModel):
+    token: str
 
 
 class AgentCompleteIn(BaseModel):
@@ -395,6 +403,24 @@ async def regenerate_printing_token(user=Depends(require_restaurant)):
     return {"printer_agent_token": token}
 
 
+@router.post("/admin/printing/agent/validate")
+async def validate_print_agent_token(data: AgentValidateIn, user=Depends(require_restaurant)):
+    token = data.token.strip()
+    if not token:
+        raise HTTPException(400, "Token de impressao vazio")
+    restaurant = await db.restaurants.find_one({"printer_agent_token": token}, {"_id": 0})
+    if not restaurant:
+        raise HTTPException(401, "Token de impressao invalido")
+    if restaurant.get("id") != rid(user):
+        raise HTTPException(403, "Este token pertence a outra loja")
+    return {
+        "ok": True,
+        "restaurant_id": restaurant.get("id"),
+        "restaurant_name": restaurant.get("name"),
+        "slug": restaurant.get("slug"),
+    }
+
+
 @router.get("/admin/printing/qz/certificate", response_class=PlainTextResponse)
 async def get_qz_certificate(user=Depends(require_restaurant)):
     material = await _get_qz_material()
@@ -484,7 +510,7 @@ async def list_print_jobs(limit: int = 50, user=Depends(require_restaurant)):
 
 
 @router.get("/admin/printing/agent/download")
-async def download_print_agent(request: Request, user=Depends(require_restaurant)):
+async def download_print_agent(user=Depends(require_restaurant)):
     restaurant = await db.restaurants.find_one({"id": rid(user)}, {"_id": 0})
     if not restaurant:
         raise HTTPException(404, "Restaurante nao encontrado")
@@ -492,107 +518,17 @@ async def download_print_agent(request: Request, user=Depends(require_restaurant
     if not restaurant.get("printer_agent_token"):
         await db.restaurants.update_one({"id": rid(user)}, {"$set": {"printer_agent_token": settings["printer_agent_token"]}})
 
-    api_url = str(request.base_url).rstrip("/") + "/api"
-    printer_name = restaurant.get("printer_name") or ""
     setup_exe = _find_windows_setup()
-
-    config = {
-        "api": api_url,
-        "endpoint": api_url,
-        "api_url": api_url,
-        "token": settings["printer_agent_token"],
-        "store_token": settings["printer_agent_token"],
-        "printer_agent_token": settings["printer_agent_token"],
-        "chave": settings["printer_agent_token"],
-        "key": settings["printer_agent_token"],
-        "printer_name": printer_name,
-        "poll_ms": 5000,
-        "agent_id": f"{restaurant.get('slug') or restaurant.get('id')}-print-agent",
-        "agentId": f"{restaurant.get('slug') or restaurant.get('id')}-print-agent",
-    }
-
     if not setup_exe:
         raise HTTPException(
             500,
-            "Instalador Windows nao encontrado no servidor. Gere print-agent/dist/Dino Menu Impressora Setup.exe antes do deploy.",
+            "Instalador Windows nao encontrado no servidor. Gere print-agent/dist/EG Delivery Impressora Setup.exe antes do deploy.",
         )
-
-    install_bat = """@echo off
-title Instalar Dino Menu Impressora
-set "CONFIG_FILE=%~dp0config.egdelivery.json"
-if not exist "%CONFIG_FILE%" set "CONFIG_FILE=%~dp0config.json"
-if not exist "%CONFIG_FILE%" (
-  echo Arquivo de vinculo da loja nao encontrado.
-  echo Baixe novamente o instalador pelo painel da loja.
-  pause
-  exit /b 1
-)
-
-taskkill /IM "Dino Menu Impressora.exe" /F >nul 2>nul
-taskkill /IM "EG Delivery.exe" /F >nul 2>nul
-taskkill /IM "eg-delivery-print-agent.exe" /F >nul 2>nul
-
-for %%D in (
-  "%APPDATA%\\Dino Menu Impressora"
-  "%APPDATA%\\DinoMenu Impressora"
-  "%APPDATA%\\EG Delivery"
-  "%APPDATA%\\EG Delivery Printer"
-  "%APPDATA%\\EG Delivery Impressora"
-  "%APPDATA%\\EG Delivery Impressora Automatica"
-  "%APPDATA%\\eg-delivery-print-agent"
-  "%APPDATA%\\egdelivery-print-agent"
-  "%LOCALAPPDATA%\\Dino Menu Impressora"
-  "%LOCALAPPDATA%\\DinoMenu Impressora"
-  "%LOCALAPPDATA%\\EG Delivery"
-  "%LOCALAPPDATA%\\EG Delivery Printer"
-  "%LOCALAPPDATA%\\EG Delivery Impressora"
-  "%LOCALAPPDATA%\\EG Delivery Impressora Automatica"
-  "%LOCALAPPDATA%\\eg-delivery-print-agent"
-  "%LOCALAPPDATA%\\egdelivery-print-agent"
-) do (
-  mkdir "%%~D" >nul 2>nul
-  copy /Y "%CONFIG_FILE%" "%%~D\\config.json" >nul
-  copy /Y "%CONFIG_FILE%" "%%~D\\config.egdelivery.json" >nul
-)
-
-start "" /wait "%~dp0Dino Menu Impressora Setup.exe"
-
-for %%E in (
-  "%LOCALAPPDATA%\\Programs\\Dino Menu Impressora\\Dino Menu Impressora.exe"
-  "%LOCALAPPDATA%\\Programs\\EG Delivery\\EG Delivery.exe"
-  "%LOCALAPPDATA%\\Dino Menu Impressora\\Dino Menu Impressora.exe"
-  "%LOCALAPPDATA%\\EG Delivery\\EG Delivery.exe"
-) do (
-  if exist "%%~E" start "" "%%~E"
-)
-
-echo.
-echo Dino Menu Impressora instalado e vinculado a esta loja.
-pause
-"""
-
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        z.write(setup_exe, "Dino Menu Impressora Setup.exe", compress_type=zipfile.ZIP_STORED)
-        z.writestr("config.egdelivery.json", json.dumps(config, indent=2, ensure_ascii=False))
-        z.writestr("config.json", json.dumps(config, indent=2, ensure_ascii=False))
-        z.writestr("1-CLIQUE-AQUI-PARA-INSTALAR-E-VINCULAR.bat", install_bat)
-        z.writestr("1-INSTALAR-E-VINCULAR-IMPRESSORA.bat", install_bat)
-        z.writestr("Instalar Dino Menu Impressora.bat", install_bat)
-        z.writestr("LEIA-ME-PRIMEIRO.txt", (
-            "Dino Menu - Instalador da Impressora\n\n"
-            "1. Extraia este ZIP no computador da loja conectado a impressora.\n"
-            "2. De dois cliques em: 1-CLIQUE-AQUI-PARA-INSTALAR-E-VINCULAR.bat\n"
-            "3. Confirme a instalacao do programa.\n"
-            "4. Pronto. O icone do Dino Menu ficara perto do relogio do Windows.\n\n"
-            "Nao execute apenas o .exe, pois ele instala o app sem vincular a loja.\n\n"
-            "Dentro do programa, use Testar impressao para conferir a impressora.\n"
-            "Para suporte, abra Logs e suporte no icone da bandeja.\n"
-        ))
-    buf.seek(0)
-
-    headers = {"Content-Disposition": 'attachment; filename="dino-menu-impressora-windows.zip"'}
-    return StreamingResponse(buf, media_type="application/zip", headers=headers)
+    return FileResponse(
+        setup_exe,
+        media_type="application/octet-stream",
+        filename="EG Delivery Impressora Setup.exe",
+    )
 
 
 @router.post("/admin/orders/{oid}/print")

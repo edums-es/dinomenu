@@ -19,8 +19,8 @@
       <section id="linkPanel" class="panel link-panel">
         <div class="panel-heading">
           <div>
-            <h2>Conectar loja manualmente</h2>
-            <p class="muted">Cole a URL/API e o token exibidos no painel da loja.</p>
+            <h2>Entrar e vincular loja</h2>
+            <p class="muted">Use a conta do EG Delivery e cole o token de impressao exibido no painel da loja.</p>
           </div>
         </div>
         <div class="link-grid">
@@ -29,11 +29,19 @@
             <input id="apiInput" type="url" placeholder="https://api.easygrowth.com.br/api" autocomplete="off" />
           </div>
           <div>
+            <label for="emailInput">E-mail da conta</label>
+            <input id="emailInput" type="email" placeholder="email@loja.com.br" autocomplete="username" />
+          </div>
+          <div>
+            <label for="passwordInput">Senha</label>
+            <input id="passwordInput" type="password" placeholder="Senha do EG Delivery" autocomplete="current-password" />
+          </div>
+          <div>
             <label for="tokenInput">Token da loja</label>
             <input id="tokenInput" type="password" placeholder="Cole o token do programa" autocomplete="off" />
           </div>
         </div>
-        <button id="linkStore" class="primary full-width">Salvar token e conectar</button>
+        <button id="linkStore" class="primary full-width">Entrar, validar token e conectar</button>
         <p id="linkFeedback" class="muted feedback"></p>
       </section>
 

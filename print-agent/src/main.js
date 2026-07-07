@@ -30,7 +30,7 @@ function createWindow() {
     minWidth: 420,
     minHeight: 760,
     show: false,
-    title: "Dino Menu Impressora",
+    title: "EG Delivery Impressora",
     backgroundColor: "#050807",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -62,7 +62,7 @@ function updateTray() {
   if (!tray || !service) return;
   const state = service.snapshot();
   const connected = state.connected && !state.lastError;
-  tray.setToolTip(`Dino Menu Impressora\n${state.status}`);
+  tray.setToolTip(`EG Delivery Impressora\n${state.status}`);
   tray.setImage(trayIcon(connected ? "#19d98b" : "#f5c542"));
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: "Abrir status", click: () => createWindow() },
@@ -105,7 +105,7 @@ app.whenReady().then(async () => {
     notify("Pedido impresso", `Pedido #${job.order_number || job.id} enviado para a impressora.`);
   });
   service.on("error-log", (message) => {
-    notify("Dino Menu Impressora", message);
+    notify("EG Delivery Impressora", message);
   });
 
   updateTray();
@@ -140,11 +140,13 @@ ipcMain.handle("set-printer", async (_event, printerName) => {
 });
 ipcMain.handle("link-store", async (_event, settings = {}) => {
   const api = String(settings.api || "").trim().replace(/\/+$/, "");
+  const email = String(settings.email || "").trim();
+  const password = String(settings.password || "");
   const token = String(settings.token || "").trim();
-  if (!api || !token) {
-    throw new Error("Informe a URL/API e o token da loja");
+  if (!email || !password || !token) {
+    throw new Error("Informe e-mail, senha e token da loja");
   }
-  await service.saveConfig({ api, token });
+  await service.linkStore({ api, email, password, token });
   await service.restart();
   return service.snapshot();
 });

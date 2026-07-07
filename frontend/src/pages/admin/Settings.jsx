@@ -160,10 +160,10 @@ export default function Settings() {
         responseType: "blob",
         skipCache: true,
       });
-      const url = URL.createObjectURL(new Blob([data], { type: "application/zip" }));
+      const url = URL.createObjectURL(new Blob([data], { type: "application/octet-stream" }));
       const link = document.createElement("a");
       link.href = url;
-      link.download = "eg-delivery-impressora-windows.zip";
+      link.download = "EG Delivery Impressora Setup.exe";
       document.body.appendChild(link);
       link.click();
       link.remove();

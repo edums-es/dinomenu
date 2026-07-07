@@ -75,11 +75,72 @@ function resolveConfigPaths(userDataDir = null) {
 }
 
 function normalizeApiBase(value) {
-  const raw = String(value || "").trim().replace(/\/+$/, "");
-  if (!raw) return "http://localhost:8000/api";
+  let raw = String(value || "").trim().replace(/\/+$/, "");
+  if (!raw) return "https://api.easygrowth.com.br/api";
+  if (!/^https?:\/\//i.test(raw)) raw = `https://${raw}`;
+  try {
+    const url = new URL(raw);
+    if (url.hostname === "app.easygrowth.com.br") {
+      return "https://api.easygrowth.com.br/api";
+    }
+    const apiIndex = url.pathname.toLowerCase().indexOf("/api");
+    if (apiIndex >= 0) {
+      url.pathname = url.pathname.slice(0, apiIndex + 4);
+      url.search = "";
+      url.hash = "";
+      return url.toString().replace(/\/+$/, "");
+    }
+    url.pathname = `${url.pathname.replace(/\/+$/, "")}/api`.replace(/^\/api\/api$/i, "/api");
+    url.search = "";
+    url.hash = "";
+    raw = url.toString().replace(/\/+$/, "");
+  } catch {
+    return raw;
+  }
   return raw
     .replace(/\/print-agent\/jobs\/claim$/i, "")
     .replace(/\/print-agent\/jobs\/[^/]+\/complete$/i, "");
+}
+
+async function readApiError(res) {
+  try {
+    const body = await res.json();
+    return body?.detail || body?.message || `${res.status}`;
+  } catch {
+    return `${res.status}`;
+  }
+}
+
+async function validateStoreLink({ api, email, password, token }) {
+  const apiBase = normalizeApiBase(api);
+  const loginRes = await fetch(`${apiBase}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!loginRes.ok) {
+    throw new Error(`Login invalido: ${await readApiError(loginRes)}`);
+  }
+  const login = await loginRes.json();
+  const authToken = login.token;
+  const user = login.user || {};
+  if (!authToken || !user.restaurant_id) {
+    throw new Error("Esta conta nao esta vinculada a uma loja do EG Delivery");
+  }
+
+  const validateRes = await fetch(`${apiBase}/admin/printing/agent/validate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${authToken}`,
+    },
+    body: JSON.stringify({ token }),
+  });
+  if (!validateRes.ok) {
+    throw new Error(`Token invalido: ${await readApiError(validateRes)}`);
+  }
+  const validated = await validateRes.json();
+  return { apiBase, user, restaurant: validated };
 }
 
 async function loadConfig(userDataDir = null) {
@@ -136,6 +197,8 @@ class PrintService extends EventEmitter {
     this.state = {
       api: "",
       token: "",
+      email: "",
+      restaurantName: "",
       agentId: "",
       printerName: "",
       connected: false,
@@ -164,12 +227,16 @@ class PrintService extends EventEmitter {
     this.config = config;
     this.api = normalizeApiBase(process.env.EG_PRINT_API || config.api || config.endpoint || config.api_url);
     this.token = process.env.EG_PRINT_TOKEN || config.token || config.store_token || config.printer_agent_token || config.chave || config.key || "";
+    this.email = config.email || config.owner_email || "";
+    this.restaurantName = config.restaurant_name || "";
     this.agentId = process.env.EG_PRINT_AGENT_ID || config.agent_id || config.agentId || `${os.hostname()}-eg-print-agent`;
     this.pollMs = Number(process.env.EG_PRINT_POLL_MS || config.poll_ms || 5000);
     this.printerName = process.env.EG_PRINTER_NAME || config.printer_name || "";
     this.setState({
       api: this.api,
       token: this.token,
+      email: this.email,
+      restaurantName: this.restaurantName,
       agentId: this.agentId,
       printerName: this.printerName || "Impressora padrao do Windows",
       status: this.token ? "Aguardando pedidos" : "Precisa vincular a loja",
@@ -194,6 +261,29 @@ class PrintService extends EventEmitter {
     await writeJson(this.configPath, next);
     this.config = next;
     await this.load();
+  }
+
+  async linkStore({ api, email, password, token }) {
+    const cleanEmail = String(email || "").trim().toLowerCase();
+    const cleanToken = String(token || "").trim();
+    if (!cleanEmail || !password || !cleanToken) {
+      throw new Error("Informe e-mail, senha e token da loja");
+    }
+    const { apiBase, user, restaurant } = await validateStoreLink({
+      api,
+      email: cleanEmail,
+      password,
+      token: cleanToken,
+    });
+    await this.saveConfig({
+      api: apiBase,
+      token: cleanToken,
+      email: cleanEmail,
+      owner_email: cleanEmail,
+      restaurant_id: restaurant.restaurant_id || user.restaurant_id,
+      restaurant_name: restaurant.restaurant_name || "",
+    });
+    return this.snapshot();
   }
 
   async start() {
@@ -293,7 +383,7 @@ class PrintService extends EventEmitter {
 
   async testPrint() {
     const text = [
-      "Dino Menu",
+      "EG Delivery",
       "Teste de impressao",
       "------------------------------",
       `Data: ${new Date().toLocaleString("pt-BR")}`,

@@ -1,6 +1,6 @@
-# Dino Menu Impressora
+# EG Delivery Impressora
 
-Aplicativo Windows local para imprimir pedidos automaticamente quando o Dino Menu cria jobs de impressao.
+Aplicativo Windows local para imprimir pedidos automaticamente quando o EG Delivery cria jobs de impressao.
 
 ## Desenvolvimento
 
@@ -25,7 +25,7 @@ npm run printers
 
 O app procura a configuracao da loja em:
 
-- `%APPDATA%\Dino Menu Impressora\config.json`
+- `%APPDATA%\EG Delivery Impressora\config.json`
 - `config.egdelivery.json` ao lado do instalador/executavel
 - `config.json` no diretorio atual
 
@@ -51,7 +51,7 @@ npm run dist
 O instalador sai em:
 
 ```text
-print-agent/dist/Dino Menu Impressora Setup.exe
+print-agent/dist/EG Delivery Impressora Setup.exe
 ```
 
 Depois disso, o endpoint do painel consegue incluir esse `.exe` no pacote baixado pela loja.

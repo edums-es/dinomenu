@@ -1,9 +1,9 @@
 {
   "name": "eg-delivery-print-agent",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
-  "description": "Aplicativo local de impressao automatica do Dino Menu.",
-  "author": "Dino Menu",
+  "description": "Aplicativo local de impressao automatica do EG Delivery.",
+  "author": "EG Delivery",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
@@ -19,8 +19,9 @@
   },
   "build": {
     "appId": "br.com.easygrowth.egdelivery.print",
-    "productName": "Dino Menu Impressora",
+    "productName": "EG Delivery Impressora",
     "artifactName": "${productName} Setup.${ext}",
+    "electronDist": "node_modules/electron/dist",
     "directories": {
       "output": "dist"
     },
@@ -31,6 +32,7 @@
     ],
     "win": {
       "icon": "build/icon.ico",
+      "signAndEditExecutable": false,
       "target": [
         {
           "target": "nsis",
@@ -39,7 +41,7 @@
           ]
         }
       ],
-      "publisherName": "Dino Menu"
+      "publisherName": "EG Delivery"
     },
     "nsis": {
       "oneClick": false,
@@ -47,7 +49,7 @@
       "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Dino Menu Impressora",
+      "shortcutName": "EG Delivery Impressora",
       "runAfterFinish": true,
       "deleteAppDataOnUninstall": false
     }

@@ -5,6 +5,8 @@ const els = {
   lastOrder: document.getElementById("lastOrder"),
   printedCount: document.getElementById("printedCount"),
   apiInput: document.getElementById("apiInput"),
+  emailInput: document.getElementById("emailInput"),
+  passwordInput: document.getElementById("passwordInput"),
   tokenInput: document.getElementById("tokenInput"),
   linkStore: document.getElementById("linkStore"),
   linkFeedback: document.getElementById("linkFeedback"),
@@ -34,14 +36,15 @@ function renderState(state = {}) {
   els.statusDot.className = `status-dot ${connected ? "ok" : hasError ? "error" : ""}`;
   els.statusLabel.textContent = state.status || "Iniciando";
   els.statusHint.textContent = connected
-    ? "Conectado ao EG Delivery e aguardando pedidos."
+    ? `Conectado${state.restaurantName ? ` a ${state.restaurantName}` : " ao EG Delivery"} e aguardando pedidos.`
     : hasError
-      ? "Confira a URL/API, token, internet ou impressora."
+      ? "Confira URL/API, e-mail, senha, token, internet ou impressora."
       : "Aguardando conexao com a loja.";
   els.lastOrder.textContent = state.lastOrder ? `#${state.lastOrder}` : "-";
   els.printedCount.textContent = String(state.printedCount || 0);
 
   if (!els.apiInput.value) els.apiInput.value = state.api || "https://api.easygrowth.com.br/api";
+  if (!els.emailInput.value && state.email) els.emailInput.value = state.email;
   if (!els.tokenInput.value && state.token) els.tokenInput.value = state.token;
   els.linkPanel.classList.toggle("needs-link", hasError || !state.token || state.status === "Token da loja nao encontrado");
 
@@ -83,16 +86,19 @@ els.printerSelect.addEventListener("change", async () => {
 
 els.linkStore.addEventListener("click", async () => {
   setBusy(els.linkStore, true);
-  els.linkFeedback.textContent = "Salvando token e conectando...";
+  els.linkFeedback.textContent = "Entrando, validando token e conectando...";
   try {
     const state = await window.egPrint.linkStore({
       api: els.apiInput.value,
+      email: els.emailInput.value,
+      password: els.passwordInput.value,
       token: els.tokenInput.value,
     });
     renderState(state);
-    els.linkFeedback.textContent = "Token salvo. Conexao reiniciada.";
+    els.passwordInput.value = "";
+    els.linkFeedback.textContent = "Conta e token validados. Conexao reiniciada.";
   } catch (error) {
-    els.linkFeedback.textContent = error?.message || "Nao foi possivel salvar o token.";
+    els.linkFeedback.textContent = error?.message || "Nao foi possivel conectar a loja.";
   } finally {
     setBusy(els.linkStore, false);
   }
