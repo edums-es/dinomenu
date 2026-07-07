@@ -100,8 +100,40 @@ def _generate_qz_material() -> dict:
     from cryptography.hazmat.primitives.asymmetric import rsa
     from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
+    root_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    root_subject = x509.Name([
+        x509.NameAttribute(NameOID.COUNTRY_NAME, "BR"),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "EG Delivery"),
+        x509.NameAttribute(NameOID.COMMON_NAME, "EG Delivery QZ Root"),
+    ])
+    root_certificate = (
+        x509.CertificateBuilder()
+        .subject_name(root_subject)
+        .issuer_name(root_subject)
+        .public_key(root_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.now(timezone.utc) - timedelta(days=1))
+        .not_valid_after(datetime.now(timezone.utc) + timedelta(days=3650))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=True,
+                crl_sign=True,
+                encipher_only=False,
+                decipher_only=False,
+            ),
+            critical=True,
+        )
+        .sign(root_key, hashes.SHA256())
+    )
+
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    subject = issuer = x509.Name([
+    subject = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, "BR"),
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, "EG Delivery"),
         x509.NameAttribute(NameOID.COMMON_NAME, "app.easygrowth.com.br"),
@@ -109,7 +141,7 @@ def _generate_qz_material() -> dict:
     certificate = (
         x509.CertificateBuilder()
         .subject_name(subject)
-        .issuer_name(issuer)
+        .issuer_name(root_subject)
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
         .not_valid_before(datetime.now(timezone.utc) - timedelta(days=1))
@@ -137,10 +169,11 @@ def _generate_qz_material() -> dict:
             critical=True,
         )
         .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.CODE_SIGNING]), critical=False)
-        .sign(key, hashes.SHA256())
+        .sign(root_key, hashes.SHA256())
     )
     return {
-        "version": 2,
+        "version": 3,
+        "root_certificate": root_certificate.public_bytes(serialization.Encoding.PEM).decode("utf-8"),
         "certificate": certificate.public_bytes(serialization.Encoding.PEM).decode("utf-8"),
         "private_key": key.private_bytes(
             serialization.Encoding.PEM,
@@ -162,8 +195,18 @@ async def _get_qz_material() -> dict:
         )
 
     stored = await db.platform_settings.find_one({"_id": "qz_tray"}, {"_id": 0})
-    if stored and stored.get("version") == 2 and stored.get("certificate") and stored.get("private_key"):
-        return {"certificate": stored["certificate"], "private_key": stored["private_key"]}
+    if (
+        stored
+        and stored.get("version") == 3
+        and stored.get("root_certificate")
+        and stored.get("certificate")
+        and stored.get("private_key")
+    ):
+        return {
+            "root_certificate": stored["root_certificate"],
+            "certificate": stored["certificate"],
+            "private_key": stored["private_key"],
+        }
 
     generated = _generate_qz_material()
     await db.platform_settings.update_one(
@@ -374,6 +417,63 @@ async def sign_qz_request(data: QzSignatureIn, user=Depends(require_restaurant))
     except Exception as exc:
         raise HTTPException(500, f"Nao foi possivel assinar requisicao QZ Tray: {exc}")
     return {"signature": base64.b64encode(signature).decode("ascii")}
+
+
+@router.get("/admin/printing/qz/trust-kit")
+async def download_qz_trust_kit(user=Depends(require_restaurant)):
+    material = await _get_qz_material()
+    root_certificate = material.get("root_certificate")
+    if not root_certificate:
+        raise HTTPException(409, "Este ambiente usa certificado QZ oficial e nao precisa do pacote de confianca.")
+
+    install_bat = r"""@echo off
+title EG Delivery - Corrigir autorizacao do QZ Tray
+setlocal
+
+net session >nul 2>nul
+if %errorlevel% neq 0 (
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+  exit /b
+)
+
+set "QZ_DIR=%ProgramFiles%\QZ Tray"
+if not exist "%QZ_DIR%" set "QZ_DIR=%ProgramFiles(x86)%\QZ Tray"
+if not exist "%QZ_DIR%" (
+  echo QZ Tray nao encontrado. Instale o QZ Tray primeiro e rode este arquivo novamente.
+  pause
+  exit /b 1
+)
+
+taskkill /IM "qz-tray.exe" /F >nul 2>nul
+copy /Y "%~dp0override.crt" "%QZ_DIR%\override.crt" >nul
+
+if exist "%QZ_DIR%\qz-tray.exe" start "" "%QZ_DIR%\qz-tray.exe"
+
+echo.
+echo Autorizacao do QZ Tray corrigida para o EG Delivery.
+echo Feche e abra o painel novamente, depois teste a impressao.
+pause
+"""
+
+    readme = (
+        "EG Delivery - Correcao de autorizacao do QZ Tray\n\n"
+        "Use este pacote quando o QZ Tray pedir permissao de impressao toda hora.\n\n"
+        "1. Extraia este ZIP.\n"
+        "2. Execute INSTALAR-CORRECAO-QZ.bat.\n"
+        "3. Aceite a permissao de administrador do Windows.\n"
+        "4. Abra o QZ Tray e teste a impressao de novo pelo painel.\n\n"
+        "O arquivo override.crt instala a raiz de confianca usada para assinar os pedidos de impressao do EG Delivery.\n"
+    )
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("override.crt", root_certificate)
+        z.writestr("INSTALAR-CORRECAO-QZ.bat", install_bat)
+        z.writestr("LEIA-ME.txt", readme)
+    buf.seek(0)
+
+    headers = {"Content-Disposition": 'attachment; filename="eg-delivery-correcao-qz.zip"'}
+    return StreamingResponse(buf, media_type="application/zip", headers=headers)
 
 
 @router.get("/admin/printing/jobs")

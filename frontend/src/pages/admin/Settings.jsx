@@ -12,7 +12,7 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from "@/components/ui/select";
 import ImageUpload from "@/components/admin/ImageUpload";
-import { Loader2, Save, Copy, Check, Printer, RefreshCw, Activity, Download, MonitorDown } from "lucide-react";
+import { Loader2, Save, Copy, Check, Printer, RefreshCw, Activity, Download, MonitorDown, ShieldCheck } from "lucide-react";
 import { API } from "@/lib/api";
 import { getQzPrintSettings, listQzPrinters, printQzReceipt, saveQzPrintSettings } from "@/lib/qzPrint";
 
@@ -51,6 +51,7 @@ export default function Settings() {
   const [qzPrinters, setQzPrinters] = useState([]);
   const [qzStatus, setQzStatus] = useState("idle");
   const [qzTesting, setQzTesting] = useState(false);
+  const [qzTrustDownloading, setQzTrustDownloading] = useState(false);
 
   useEffect(() => { api.get("/admin/restaurant").then((res) => setR(res.data)); }, []);
   useEffect(() => {
@@ -155,6 +156,30 @@ export default function Settings() {
       toast.error(detail);
     } finally {
       setQzTesting(false);
+    }
+  };
+
+  const downloadQzTrustKit = async () => {
+    setQzTrustDownloading(true);
+    try {
+      const { data } = await api.get("/admin/printing/qz/trust-kit", {
+        responseType: "blob",
+        skipCache: true,
+      });
+      const url = URL.createObjectURL(new Blob([data], { type: "application/zip" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "eg-delivery-correcao-qz.zip";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Correcao do QZ baixada");
+    } catch (err) {
+      const detail = err?.response?.data?.detail || err?.message || "Nao foi possivel baixar a correcao do QZ.";
+      toast.error(detail);
+    } finally {
+      setQzTrustDownloading(false);
     }
   };
 
@@ -594,21 +619,33 @@ export default function Settings() {
                   </p>
                 </div>
               </div>
-              <Button asChild className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl">
-                <a
-                  href="https://github.com/qzind/tray/releases/download/v2.2.6/qz-tray-2.2.6-x86_64.exe"
-                  target="_blank"
-                  rel="noopener noreferrer"
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={downloadQzTrustKit}
+                  disabled={qzTrustDownloading}
+                  className="rounded-xl dark:border-emerald-800 dark:text-emerald-200"
                 >
-                  <Download className="w-4 h-4 mr-1" /> Baixar QZ Tray
-                </a>
-              </Button>
+                  {qzTrustDownloading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <ShieldCheck className="w-4 h-4 mr-1" />}
+                  Corrigir autorizacao
+                </Button>
+                <Button asChild className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl">
+                  <a
+                    href="https://github.com/qzind/tray/releases/download/v2.2.6/qz-tray-2.2.6-x86_64.exe"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Download className="w-4 h-4 mr-1" /> Baixar QZ Tray
+                  </a>
+                </Button>
+              </div>
             </div>
 
             <div className="grid md:grid-cols-3 gap-3">
               {[
                 ["1", "Baixe e instale o QZ Tray no computador da loja."],
-                ["2", "Abra o QZ Tray e mantenha ele ativo no Windows."],
+                ["2", "Se pedir permissao toda hora, baixe e execute Corrigir autorizacao."],
                 ["3", "Volte aqui e use Reconhecer impressoras."],
               ].map(([step, text]) => (
                 <div key={step} className="rounded-xl bg-white/75 dark:bg-black/20 border border-white dark:border-emerald-900/60 p-3">
