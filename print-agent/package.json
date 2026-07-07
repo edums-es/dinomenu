@@ -1,6 +1,6 @@
 {
   "name": "eg-delivery-print-agent",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "description": "Aplicativo local de impressao automatica do EG Delivery.",
   "author": "EG Delivery",
@@ -44,6 +44,7 @@
       "publisherName": "EG Delivery"
     },
     "nsis": {
+      "include": "build/installer.nsh",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": false,

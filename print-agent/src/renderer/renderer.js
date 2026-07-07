@@ -11,6 +11,7 @@ const els = {
   linkStore: document.getElementById("linkStore"),
   linkFeedback: document.getElementById("linkFeedback"),
   linkPanel: document.getElementById("linkPanel"),
+  versionBadge: document.getElementById("versionBadge"),
   printerSelect: document.getElementById("printerSelect"),
   refreshPrinters: document.getElementById("refreshPrinters"),
   testPrint: document.getElementById("testPrint"),
@@ -31,6 +32,7 @@ function setBusy(button, busy) {
 function renderState(state = {}) {
   const hasError = Boolean(state.lastError);
   const connected = Boolean(state.connected) && !hasError;
+  const needsLink = hasError || !state.token || state.status === "Token da loja nao encontrado";
   currentPrinter = state.printerName === "Impressora padrao do Windows" ? "" : state.printerName || "";
 
   els.statusDot.className = `status-dot ${connected ? "ok" : hasError ? "error" : ""}`;
@@ -42,11 +44,12 @@ function renderState(state = {}) {
       : "Aguardando conexao com a loja.";
   els.lastOrder.textContent = state.lastOrder ? `#${state.lastOrder}` : "-";
   els.printedCount.textContent = String(state.printedCount || 0);
+  els.versionBadge.textContent = state.appVersion ? `v${state.appVersion}` : "";
 
   if (!els.apiInput.value) els.apiInput.value = state.api || "https://api.easygrowth.com.br/api";
   if (!els.emailInput.value && state.email) els.emailInput.value = state.email;
   if (!els.tokenInput.value && state.token) els.tokenInput.value = state.token;
-  els.linkPanel.classList.toggle("needs-link", hasError || !state.token || state.status === "Token da loja nao encontrado");
+  els.linkPanel.classList.toggle("needs-link", needsLink);
 
   els.errorBox.classList.toggle("hidden", !hasError);
   els.errorText.textContent = state.lastError || "";

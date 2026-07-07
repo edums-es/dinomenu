@@ -54,8 +54,15 @@ function createWindow() {
 
 function sendState() {
   if (mainWindow && service) {
-    mainWindow.webContents.send("print-state", service.snapshot());
+    mainWindow.webContents.send("print-state", currentState());
   }
+}
+
+function currentState() {
+  return {
+    ...(service?.snapshot() || {}),
+    appVersion: app.getVersion(),
+  };
 }
 
 function updateTray() {
@@ -123,20 +130,20 @@ app.on("before-quit", () => {
   quitting = true;
 });
 
-ipcMain.handle("get-state", () => service?.snapshot());
+ipcMain.handle("get-state", () => currentState());
 ipcMain.handle("test-print", async () => {
   await service.testPrint();
-  return service.snapshot();
+  return currentState();
 });
 ipcMain.handle("restart-service", async () => {
   await service.restart();
-  return service.snapshot();
+  return currentState();
 });
 ipcMain.handle("list-printers", () => service.getPrinters());
 ipcMain.handle("set-printer", async (_event, printerName) => {
   await service.saveConfig({ printer_name: printerName || "" });
   await service.restart();
-  return service.snapshot();
+  return currentState();
 });
 ipcMain.handle("link-store", async (_event, settings = {}) => {
   const api = String(settings.api || "").trim().replace(/\/+$/, "");
@@ -148,7 +155,7 @@ ipcMain.handle("link-store", async (_event, settings = {}) => {
   }
   await service.linkStore({ api, email, password, token });
   await service.restart();
-  return service.snapshot();
+  return currentState();
 });
 ipcMain.handle("open-logs", () => shell.openPath(app.getPath("userData")));
 ipcMain.handle("hide-window", () => mainWindow?.hide());
