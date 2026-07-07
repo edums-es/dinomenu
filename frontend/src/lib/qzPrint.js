@@ -1,6 +1,6 @@
 import api from "@/lib/api";
 
-const QZ_CDN_URL = "https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js";
+const QZ_CDN_URL = "https://cdn.jsdelivr.net/npm/qz-tray@2.2.6/qz-tray.js";
 
 export const QZ_PRINT_ENABLED_KEY = "eg_qz_print_enabled";
 export const QZ_PRINT_TRIGGER_KEY = "eg_qz_print_trigger";
