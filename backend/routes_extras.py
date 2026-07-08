@@ -15,6 +15,7 @@ from models import (
     ORDER_STATUSES, clean, new_id, now_iso,
 )
 from order_security import calculate_order, money, next_sequence, release_stock, reserve_stock
+from routes_printing import enqueue_order_print
 
 router = APIRouter(prefix="/api/admin", tags=["extras"])
 
@@ -422,6 +423,7 @@ async def pdv_create_order(data: PDVOrderIn, user=Depends(require_restaurant)):
     except Exception:
         await release_stock(db, restaurant_id, reserved)
         raise
+    await enqueue_order_print(restaurant, clean(doc), "created")
 
     if points_earned > 0:
         await db.loyalty_accounts.update_one(

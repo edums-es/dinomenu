@@ -198,6 +198,10 @@ async def seed():
     await db.orders.create_index([("restaurant_id", 1), ("order_number", 1)], unique=True)
     await db.sequences.create_index([("restaurant_id", 1), ("type", 1)], unique=True)
     await db.orders.create_index([("customer_phone_suffix", 1), ("created_at", -1)])
+    await db.print_jobs.create_index("job_key", unique=True)
+    await db.print_jobs.create_index([("restaurant_id", 1), ("status", 1), ("created_at", 1)])
+    await db.print_agents.create_index("token_hash", unique=True)
+    await db.print_agents.create_index([("restaurant_id", 1), ("device_id", 1)], unique=True)
 
     # Super admin
     admin_email = os.environ.get("ADMIN_EMAIL", "super@menudigital.com").lower()

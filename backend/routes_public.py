@@ -19,6 +19,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from db import db
 from whatsapp import send_whatsapp
 from routes_ws import broadcast as ws_broadcast
+from routes_printing import enqueue_order_print
 from models import OrderIn, clean, is_restaurant_open, new_id, now_iso
 from order_security import (
     calculate_order,
@@ -845,6 +846,7 @@ async def create_order(slug: str, order: OrderIn):
         logger.info(f"[OpenPix] Pedido {doc['id']} aguardando pagamento — restaurante sera notificado apos confirmacao")
     else:
         # Pagamento manual (dinheiro, cartao, pix manual): notifica imediatamente
+        await enqueue_order_print(r, clean(doc), "created")
         asyncio.create_task(ws_broadcast(r["id"], "new_order", {"order_number": order_number, "id": doc["id"]}))
         asyncio.create_task(_push_onesignal(r["id"], order_number, f"Novo pedido #{order_number}!"))
         asyncio.create_task(_notify_new_order(r, clean(doc), OrderIn.model_validate(doc), pix_via_openpix=False))
@@ -903,7 +905,12 @@ async def openpix_webhook(request: Request):
 
     updated = await db.orders.update_one(
         {"id": correlation_id, "restaurant_id": order["restaurant_id"], "payment_status": {"$ne": "paid"}},
-        {"$set": {"payment_status": "paid", "status": "accepted", "updated_at": now_iso()}},
+        {"$set": {
+            "payment_status": "paid",
+            "status": "accepted",
+            "accepted_at": now_iso(),
+            "updated_at": now_iso(),
+        }},
     )
     if updated.modified_count != 1:
         return JSONResponse({"ok": True})
@@ -921,6 +928,8 @@ async def openpix_webhook(request: Request):
 
     if restaurant:
         updated_order = await db.orders.find_one({"id": correlation_id}, {"_id": 0})
+        await enqueue_order_print(restaurant, updated_order, "created")
+        await enqueue_order_print(restaurant, updated_order, "accepted")
         asyncio.create_task(_notify_new_order(restaurant, updated_order, pix_via_openpix=True, order_number=order_number))
         # Notifica cliente via WhatsApp que pedido foi aceito
         from whatsapp import notify_order_status
@@ -1042,7 +1051,12 @@ async def check_pix_payment(order_id: str):
                 import asyncio
                 updated_result = await db.orders.update_one(
                     {"id": order_id, "restaurant_id": o["restaurant_id"], "payment_status": {"$ne": "paid"}},
-                    {"$set": {"payment_status": "paid", "status": "accepted", "updated_at": now_iso()}},
+                    {"$set": {
+                        "payment_status": "paid",
+                        "status": "accepted",
+                        "accepted_at": now_iso(),
+                        "updated_at": now_iso(),
+                    }},
                 )
                 if updated_result.modified_count != 1:
                     return {"payment_status": "paid", "order_status": o.get("status")}
@@ -1056,6 +1070,8 @@ async def check_pix_payment(order_id: str):
                 ))
                 if restaurant:
                     updated = await db.orders.find_one({"id": order_id}, {"_id": 0})
+                    await enqueue_order_print(restaurant, updated, "created")
+                    await enqueue_order_print(restaurant, updated, "accepted")
                     asyncio.create_task(_notify_new_order(
                         restaurant, updated, pix_via_openpix=True, order_number=order_number
                     ))

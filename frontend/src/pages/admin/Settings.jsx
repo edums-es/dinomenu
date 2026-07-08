@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import ImageUpload from "@/components/admin/ImageUpload";
+import PrintingSettings from "@/components/admin/PrintingSettings";
 import { Loader2, Save, Copy, Check } from "lucide-react";
 import { API } from "@/lib/api";
 
@@ -104,6 +105,7 @@ export default function Settings() {
           <TabsTrigger value="horarios" data-testid="tab-horarios">Horários</TabsTrigger>
           <TabsTrigger value="entrega" data-testid="tab-entrega">Entrega</TabsTrigger>
           <TabsTrigger value="pagamento" data-testid="tab-pagamento">Pagamento</TabsTrigger>
+          <TabsTrigger value="impressao" data-testid="tab-impressao">Impressao</TabsTrigger>
         </TabsList>
 
         {/* ── Loja ── */}
@@ -353,6 +355,10 @@ export default function Settings() {
               </div>
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="impressao">
+          <PrintingSettings />
         </TabsContent>
 
       </Tabs>

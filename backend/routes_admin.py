@@ -12,6 +12,7 @@ from db import db
 from auth import require_restaurant
 from whatsapp import notify_order_status
 from routes_ws import broadcast as ws_broadcast
+from routes_printing import enqueue_order_print
 from flemy import emit_flemy_event
 from order_security import release_stock
 from models import (
@@ -798,6 +799,8 @@ async def update_order_status(oid: str, data: StatusUpdate, user=Depends(require
     if not previous_order:
         raise HTTPException(status_code=404, detail="Pedido nao encontrado")
     updates = {"status": data.status, "updated_at": now_iso()}
+    if data.status == "accepted" and previous_order.get("status") != "accepted":
+        updates["accepted_at"] = now_iso()
     if data.status == "out_for_delivery" and data.delivery_person_id:
         delivery_person = await db.delivery_people.find_one(
             {"id": data.delivery_person_id, "restaurant_id": rid(user), "is_active": True},
@@ -847,6 +850,8 @@ async def update_order_status(oid: str, data: StatusUpdate, user=Depends(require
     asyncio.create_task(notify_order_status(order, data.status))
     asyncio.create_task(ws_broadcast(order['restaurant_id'], 'order_updated', {'id': order['id'], 'status': data.status}))
     restaurant = await db.restaurants.find_one({"id": order["restaurant_id"]}, {"_id": 0})
+    if data.status == "accepted":
+        await enqueue_order_print(restaurant, order, "accepted")
     event = "order.cancelled" if data.status == "cancelled" else "order.status_changed"
     asyncio.create_task(emit_flemy_event(restaurant, event, order, {"new_status": data.status}))
     return order
