@@ -19,7 +19,6 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from db import db
 from whatsapp import send_whatsapp
 from routes_ws import broadcast as ws_broadcast
-from routes_printing import enqueue_print_job
 from models import OrderIn, clean, is_restaurant_open, new_id, now_iso
 from order_security import (
     calculate_order,
@@ -763,7 +762,6 @@ async def create_order(slug: str, order: OrderIn):
     except Exception:
         await release_stock(db, r["id"], reserved)
         raise
-    asyncio.create_task(enqueue_print_job(doc, "auto_status"))
     if table:
         await db.tables.update_one(
             {"id": table["id"], "restaurant_id": r["id"]},
@@ -923,7 +921,6 @@ async def openpix_webhook(request: Request):
 
     if restaurant:
         updated_order = await db.orders.find_one({"id": correlation_id}, {"_id": 0})
-        asyncio.create_task(enqueue_print_job(updated_order, "auto_status"))
         asyncio.create_task(_notify_new_order(restaurant, updated_order, pix_via_openpix=True, order_number=order_number))
         # Notifica cliente via WhatsApp que pedido foi aceito
         from whatsapp import notify_order_status
@@ -1059,7 +1056,6 @@ async def check_pix_payment(order_id: str):
                 ))
                 if restaurant:
                     updated = await db.orders.find_one({"id": order_id}, {"_id": 0})
-                    asyncio.create_task(enqueue_print_job(updated, "auto_status"))
                     asyncio.create_task(_notify_new_order(
                         restaurant, updated, pix_via_openpix=True, order_number=order_number
                     ))

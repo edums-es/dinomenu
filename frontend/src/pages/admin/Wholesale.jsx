@@ -15,7 +15,7 @@ import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from "@/components/ui/select";
 import {
-  Building2, Plus, Pencil, Trash2, Printer, Search, X,
+  Building2, Plus, Pencil, Trash2, Search, X,
   ClipboardList, ChevronRight, CheckCircle2, XCircle, TrendingUp,
   DollarSign, Package, Clock, ChevronDown, Filter, AlertCircle,
   CreditCard, RefreshCw,
@@ -286,7 +286,7 @@ function MerchantsTab() {
 
 /* ─── Order card (expandable detail) ─────────── */
 
-function OrderCard({ order, merchants, onAdvance, onCancel, onEdit, onPrint, advancing }) {
+function OrderCard({ order, merchants, onAdvance, onCancel, onEdit, advancing }) {
   const [expanded, setExpanded] = useState(false);
   const merchant = merchants.find((m) => m.id === order.merchant_id) || {};
   const nextStatus = ORDER_STATUS_FLOW[order.status];
@@ -350,9 +350,6 @@ function OrderCard({ order, merchants, onAdvance, onCancel, onEdit, onPrint, adv
           )}
           <Button size="sm" variant="outline" onClick={() => onEdit(order)} className="gap-1 dark:border-gray-600 dark:text-gray-200">
             <Pencil className="w-3.5 h-3.5" /> Editar
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => onPrint(order)} className="gap-1 dark:border-gray-600 dark:text-gray-200">
-            <Printer className="w-3.5 h-3.5" /> Imprimir
           </Button>
           <button
             onClick={() => setExpanded((v) => !v)}
@@ -565,59 +562,6 @@ function OrdersTab() {
     return { total: orders.length, active: active.length, gmv, toReceive };
   }, [orders]);
 
-  const printOrder = (order) => {
-    const merchant = merchants.find((m) => m.id === order.merchant_id) || {};
-    const win = window.open("", "_blank", "width=800,height=700");
-    const itemsHtml = (order.items || []).map((i) =>
-      `<tr><td style="padding:6px 8px;border-bottom:1px solid #eee">${i.product_name}</td>
-       <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center">${i.quantity}</td>
-       <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">${brl(i.unit_price)}</td>
-       <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">${brl(i.unit_price * i.quantity)}</td></tr>`
-    ).join("");
-    const orderTotal = (order.items || []).reduce((a, i) => a + i.unit_price * i.quantity, 0);
-    const finalTotal = Math.max(0, orderTotal - (order.discount || 0));
-    win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>
-      <title>OS #${order.order_number || order.id}</title>
-      <style>body{font-family:Arial,sans-serif;padding:32px;color:#111;font-size:13px}
-      h1{font-size:22px;margin-bottom:4px}.header{display:flex;justify-content:space-between;margin-bottom:24px}
-      .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px;background:#f8f8f8;padding:12px;border-radius:6px}
-      .info-grid div{font-size:12px}.info-grid strong{display:block;font-size:11px;color:#555}
-      table{width:100%;border-collapse:collapse;margin-bottom:16px}thead{background:#f0f0f0}
-      th{padding:8px;text-align:left;font-size:12px}.totals{text-align:right;font-size:13px}
-      .total-line{display:flex;justify-content:flex-end;gap:24px;margin-top:4px}
-      .total-line.final{font-size:16px;font-weight:bold;margin-top:8px;border-top:2px solid #ccc;padding-top:8px}
-      .footer{margin-top:32px;font-size:11px;color:#777;border-top:1px solid #ddd;padding-top:12px}
-      .status-badge{display:inline-block;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:bold}
-      </style></head><body>
-      <div class="header">
-        <div><h1>MariscoDelivery</h1><p style="color:#555;margin:0">Ordem de Serviço</p></div>
-        <div style="text-align:right">
-          <p style="font-size:18px;font-weight:bold;margin:0">OS #${order.order_number || order.id}</p>
-          <p style="color:#555;margin:0">Status: ${ORDER_STATUS_LABELS[order.status] || order.status}</p>
-          <p style="color:#555;margin:0">${new Date(order.created_at || Date.now()).toLocaleDateString("pt-BR")}</p>
-        </div>
-      </div>
-      <div class="info-grid">
-        <div><strong>Empresa</strong>${merchant.company_name || order.merchant_name || "—"}</div>
-        <div><strong>CNPJ</strong>${merchant.cnpj || "—"}</div>
-        <div><strong>Contato</strong>${merchant.contact_name || "—"}</div>
-        <div><strong>Telefone</strong>${merchant.phone || "—"}</div>
-        <div><strong>Entrega prevista</strong>${order.delivery_date ? new Date(order.delivery_date).toLocaleDateString("pt-BR") : "—"}</div>
-        <div><strong>Pagamento</strong>${PAYMENT_METHOD_LABELS[order.payment_method] || order.payment_method || "—"} · ${PAYMENT_STATUS_LABELS[order.payment_status || "pending"]}</div>
-      </div>
-      <table><thead><tr><th>Produto</th><th style="text-align:center">Qtd</th><th style="text-align:right">Preço Un.</th><th style="text-align:right">Subtotal</th></tr></thead>
-      <tbody>${itemsHtml}</tbody></table>
-      <div class="totals">
-        <div class="total-line"><span>Subtotal:</span><span>${brl(orderTotal)}</span></div>
-        ${order.discount ? `<div class="total-line"><span>Desconto:</span><span>-${brl(order.discount)}</span></div>` : ""}
-        <div class="total-line final"><span>Total:</span><span>${brl(finalTotal)}</span></div>
-      </div>
-      ${order.notes ? `<div style="margin-top:16px;padding:10px;background:#fffbeb;border:1px solid #fde68a;border-radius:4px;font-size:12px"><strong>Obs:</strong> ${order.notes}</div>` : ""}
-      <div class="footer"><p>Gerado em ${new Date().toLocaleString("pt-BR")} — MariscoDelivery</p></div>
-      <script>window.onload=()=>{window.print()};</script></body></html>`);
-    win.document.close();
-  };
-
   const approvedMerchants = merchants.filter((m) => m.status === "approved");
 
   return (
@@ -718,7 +662,6 @@ function OrdersTab() {
               onAdvance={advanceStatus}
               onCancel={cancelOrder}
               onEdit={openEdit}
-              onPrint={printOrder}
               advancing={advancingId}
             />
           ))}

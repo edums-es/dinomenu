@@ -6,7 +6,6 @@ import { useTheme } from "@/context/ThemeContext";
 import { useBrand } from "@/context/BrandContext";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import AutoPrintMonitor from "@/components/admin/AutoPrintMonitor";
 import {
   LayoutDashboard, ClipboardList, UtensilsCrossed, FolderTree, Ticket,
   Image, BarChart3, Settings, LogOut, Menu, X, ExternalLink,
@@ -105,7 +104,6 @@ export default function AdminLayout() {
 
   return (
     <div className="admin-shell min-h-[100dvh] bg-gray-50 dark:bg-[#0A0A0A] font-admin text-gray-900 dark:text-gray-100 flex overflow-hidden">
-      <AutoPrintMonitor />
       {/* Sidebar */}
       <aside className={`fixed lg:static z-50 inset-y-0 left-0 w-64 bg-white dark:bg-[#111111] border-r border-gray-200 dark:border-gray-700 flex flex-col transition-transform duration-200 ${open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
         <div className="h-14 flex items-center gap-2.5 px-4 border-b border-gray-200 dark:border-gray-700 shrink-0">

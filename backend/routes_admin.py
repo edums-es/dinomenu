@@ -12,7 +12,6 @@ from db import db
 from auth import require_restaurant
 from whatsapp import notify_order_status
 from routes_ws import broadcast as ws_broadcast
-from routes_printing import enqueue_print_job
 from flemy import emit_flemy_event
 from order_security import release_stock
 from models import (
@@ -846,7 +845,6 @@ async def update_order_status(oid: str, data: StatusUpdate, user=Depends(require
             )
     # Fire-and-forget WhatsApp notification
     asyncio.create_task(notify_order_status(order, data.status))
-    asyncio.create_task(enqueue_print_job(order, "auto_status"))
     asyncio.create_task(ws_broadcast(order['restaurant_id'], 'order_updated', {'id': order['id'], 'status': data.status}))
     restaurant = await db.restaurants.find_one({"id": order["restaurant_id"]}, {"_id": 0})
     event = "order.cancelled" if data.status == "cancelled" else "order.status_changed"

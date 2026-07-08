@@ -7,7 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  MessageCircle, Printer, Loader2, ClipboardList,
+  MessageCircle, Loader2, ClipboardList,
   Clock, MapPin, User, Phone, ChevronRight, ChevronDown,
   ShoppingBag, CheckCircle2, XCircle, Bike, Bell, Search, Filter,
   Download, Archive, CalendarClock, BarChart3, RotateCcw,
@@ -15,7 +15,6 @@ import {
 import { toast } from "sonner";
 import { useOrdersWS } from "@/hooks/useOrdersWS";
 import { useAuth } from "@/context/AuthContext";
-import { printOrderOnce } from "@/lib/orderAutoPrint";
 
 // ── Status config ──────────────────────────────────────────────────────────
 const COLUMNS = [
@@ -220,37 +219,9 @@ function KanbanColumn({ col, orders, onSelect, onStatusChange, collapsed, onTogg
 }
 
 // ── Detail modal ──────────────────────────────────────────────────────────
-function OrderModal({ order, onClose, onStatusChange, onQueuePrint }) {
+function OrderModal({ order, onClose, onStatusChange }) {
   if (!order) return null;
   const nexts = NEXT_STATUS[order.status] || [];
-
-  const printOrder = () => {
-    const w = window.open("", "_blank");
-    const itemsText = order.items.map((it) =>
-      `${it.quantity}x ${it.product_name} - ${brl(it.total_price)}` +
-      it.options.map((op) => `\n  + ${op.name}`).join("") +
-      (it.notes ? `\n  Obs: ${it.notes}` : "")
-    ).join("\n");
-    w.document.write(`<pre style="font-family:monospace;font-size:13px;padding:16px">
-PEDIDO #${order.order_number}
-${new Date(order.created_at).toLocaleString("pt-BR")}
-────────────────────────────────
-Cliente: ${order.customer?.name}
-Tel:     ${order.customer?.phone || "—"}
-Tipo:    ${orderTypeLabel(order)}
-${order.address ? `End:     ${order.address.street}, ${order.address.number} - ${order.address.neighborhood}\n         ${order.address.complement || ""}` : ""}
-────────────────────────────────
-${itemsText}
-────────────────────────────────
-Subtotal:  ${brl(order.subtotal)}
-Entrega:   ${brl(order.delivery_fee)}
-${order.discount > 0 ? `Desconto: -${brl(order.discount)}\n` : ""}TOTAL:     ${brl(order.total)}
-Pagamento: ${order.payment_method}
-${order.change_for ? `Troco p/: ${brl(order.change_for)}` : ""}
-${order.customer_notes ? `Obs: ${order.customer_notes}` : ""}
-</pre>`);
-    w.print();
-  };
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -340,7 +311,7 @@ ${order.customer_notes ? `Obs: ${order.customer_notes}` : ""}
             </div>
           )}
 
-          {/* Contact + print */}
+          {/* Contact */}
           <div className="flex gap-2 pt-1">
             {order.customer?.phone && (
               <a href={`https://wa.me/55${order.customer.phone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" className="flex-1">
@@ -349,12 +320,6 @@ ${order.customer_notes ? `Obs: ${order.customer_notes}` : ""}
                 </Button>
               </a>
             )}
-            <Button variant="outline" className="flex-1" onClick={printOrder}>
-              <Printer className="w-4 h-4 mr-1" /> Navegador
-            </Button>
-            <Button variant="outline" className="flex-1" onClick={() => onQueuePrint(order.id)}>
-              <Printer className="w-4 h-4 mr-1" /> Fila
-            </Button>
           </div>
         </div>
       </DialogContent>
@@ -509,8 +474,6 @@ export default function Orders() {
   const updateStatus = async (id, status, extra = {}) => {
     await api.put(`/admin/orders/${id}/status`, { status, ...extra });
     toast.success(`Pedido → ${STATUS_LABEL[status]}`);
-    const order = orders.find((item) => item.id === id) || selected;
-    if (order) printOrderOnce({ ...order, status }, user?.restaurant_id);
     load(true);
     if (selected?.id === id) setSelected((s) => s && { ...s, status });
   };
@@ -531,11 +494,6 @@ export default function Orders() {
       deliveryPersonId ? { delivery_person_id: deliveryPersonId } : {}
     );
     setDeliveryPrompt(null);
-  };
-
-  const queuePrint = async (id) => {
-    await api.post(`/admin/orders/${id}/print`);
-    toast.success("Pedido enviado para a fila de impressão");
   };
 
   const exportOrders = async () => {
@@ -796,7 +754,6 @@ export default function Orders() {
         order={selected}
         onClose={() => setSelected(null)}
         onStatusChange={requestStatusChange}
-        onQueuePrint={queuePrint}
       />
       <DeliveryAssignmentModal
         prompt={deliveryPrompt}

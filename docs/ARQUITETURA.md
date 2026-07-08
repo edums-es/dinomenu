@@ -17,7 +17,6 @@ Stack principal:
 - Tempo real: WebSocket mantido pelo proprio FastAPI.
 - Arquivos: Cloudinary em producao, com fallback local.
 - Frontend em producao: build estatico servido por Nginx.
-- Impressao local: aplicativo Electron para Windows.
 - WhatsApp: Evolution API ou Kirago.
 - Pagamento automatico: OpenPix/Woovi.
 - Infraestrutura local: Docker Compose.
@@ -30,7 +29,6 @@ Cliente -> React /loja/:slug -> FastAPI /api/public -> PostgreSQL
                                       +-> OpenPix
                                       +-> WhatsApp
                                       +-> WebSocket do painel
-                                      +-> fila de impressao -> agente Windows -> impressora
 ```
 
 Diretorios mais importantes:
@@ -38,7 +36,6 @@ Diretorios mais importantes:
 ```text
 backend/             API FastAPI, regras de negocio e integracoes
 frontend/src/        aplicacao React
-print-agent/         aplicativo Electron da impressora
 whatsapp-service/    servico legado/alternativo com whatsapp-web.js
 docs/                documentacao tecnica
 docker-compose.yml   ambiente completo
@@ -155,7 +152,7 @@ Campos importantes:
 - Identidade: `name`, `slug`, `logo_url`, `cover_url`, `tagline`.
 - Aparencia: `primary_color`, `secondary_color`, cores de texto e botoes.
 - Operacao: horarios, pedido minimo, entrega, retirada e formas de pagamento.
-- Integracoes: OpenPix, WhatsApp e impressao.
+- Integracoes: OpenPix e WhatsApp.
 - Tenant: `id` identifica o restaurante e e usado como `restaurant_id`.
 
 Rotas administrativas principais:
@@ -344,7 +341,6 @@ PUT /api/admin/orders/:id/status
 Ao mudar status, o backend dispara em background:
 
 - notificacao WhatsApp ao cliente;
-- criacao de job de impressao, se configurado;
 - evento WebSocket `order_updated`.
 
 ### Acompanhamento
@@ -407,90 +403,7 @@ Pontos de atencao:
 - A confirmacao e idempotente por `payment_status == paid`.
 - O endpoint do webhook precisa estar publicamente acessivel em producao.
 
-## 9. Como funciona impressao
-
-Arquivos principais:
-
-- `backend/routes_printing.py`
-- `print-agent/src/main.js`
-- `print-agent/src/printService.js`
-- `print-agent/package.json`
-
-A impressao possui duas partes:
-
-1. Backend cria e gerencia jobs em `print_jobs`.
-2. Aplicativo Electron instalado no Windows busca e imprime esses jobs.
-
-### Configuracao
-
-O restaurante configura:
-
-- impressao habilitada;
-- status que dispara impressao;
-- nome da impressora;
-- quantidade de copias;
-- dados incluidos no comprovante.
-
-Cada restaurante possui `printer_agent_token`, usado pelo agente local.
-
-### Criacao do job
-
-`enqueue_print_job()`:
-
-1. Confere se impressao esta habilitada e se o status bate com o gatilho.
-2. Monta texto do comprovante.
-3. Cria chave `dedupe_key` para evitar impressao duplicada.
-4. Insere job com status `queued`.
-
-Tambem existe impressao manual:
-
-```http
-POST /api/admin/orders/:id/print
-```
-
-### Agente Windows
-
-O Electron inicia com o Windows e permanece na bandeja. A cada cinco segundos,
-por padrao, ele chama:
-
-```http
-POST /api/print-agent/jobs/claim
-```
-
-O agente:
-
-1. Recebe jobs pendentes.
-2. Gera arquivo texto temporario.
-3. Usa PowerShell `Out-Printer`.
-4. Informa sucesso ou falha:
-
-```http
-POST /api/print-agent/jobs/:job_id/complete
-```
-
-Jobs travados em `claimed` por mais de tres minutos sao reenfileirados. Falhas
-sao tentadas no maximo cinco vezes.
-
-### Instalador
-
-O painel baixa um ZIP personalizado contendo:
-
-- `Dino Menu Impressora Setup.exe`;
-- configuracao com API e token da loja;
-- script de instalacao;
-- instrucoes.
-
-O executavel e gerado com:
-
-```powershell
-cd print-agent
-npm install
-npm run dist
-```
-
-O backend procura o instalador em `backend/installers` e `print-agent/dist`.
-
-## 10. Como funciona WebSocket
+## 9. Como funciona WebSocket
 
 Arquivos principais:
 
@@ -718,11 +631,9 @@ REACT_APP_BACKEND_URL
 6. Configurar DNS, HTTPS e proxy de WebSocket.
 7. Configurar Evolution API/Kirago.
 8. Configurar webhook publico da OpenPix.
-9. Garantir que `backend/installers/Dino Menu Impressora Setup.exe` esteja no
-   build do backend.
-10. Verificar logs de startup e criacao dos indices PostgreSQL.
-11. Fazer backup do PostgreSQL, uploads e instancias WhatsApp.
-12. Testar pedido completo, pagamento, WhatsApp, WebSocket e impressao.
+9. Verificar logs de startup e criacao dos indices PostgreSQL.
+10. Fazer backup do PostgreSQL, uploads e instancias WhatsApp.
+11. Testar pedido completo, pagamento, WhatsApp e WebSocket.
 
 ### Pontos de atencao do deploy atual
 
@@ -744,7 +655,6 @@ backend/models.py                 Modelos Pydantic e regras compartilhadas
 backend/auth.py                   Login, JWT e autorizacao
 backend/routes_public.py          Cardapio, pedido publico, rastreio e OpenPix
 backend/routes_admin.py           Loja, produtos, categorias, pedidos e banners
-backend/routes_printing.py        Fila e configuracao de impressao
 backend/routes_ws.py              WebSocket do painel
 backend/whatsapp.py               Envio, notificacoes e webhook WhatsApp
 backend/routes_whatsapp.py        Configuracao de WhatsApp no painel
@@ -761,8 +671,6 @@ frontend/src/pages/admin/Orders.jsx
 frontend/src/pages/admin/Products.jsx
 frontend/src/pages/admin/Categories.jsx
 
-print-agent/src/main.js           Electron, janela e bandeja
-print-agent/src/printService.js   Polling e impressao via Windows
 ```
 
 ## 15. Antes de alterar uma funcionalidade
@@ -771,7 +679,7 @@ Use esta verificacao:
 
 1. A consulta esta filtrando por `restaurant_id`?
 2. A alteracao afeta painel e cardapio publico?
-3. A alteracao de pedido precisa disparar WebSocket, WhatsApp ou impressao?
+3. A alteracao de pedido precisa disparar WebSocket ou WhatsApp?
 4. A alteracao de pagamento continua idempotente?
 5. A resposta publica expoe algum segredo do restaurante?
 6. O fluxo funciona com Pix manual e automatico?

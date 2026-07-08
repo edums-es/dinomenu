@@ -21,7 +21,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  ShoppingCart, Plus, Minus, Trash2, Printer, Search,
+  ShoppingCart, Plus, Minus, Trash2, Search,
   TrendingUp, TrendingDown, DollarSign, ShoppingBag, X,
   Star, Bell, AlertTriangle, Wallet, Lock, Clock,
 } from "lucide-react";
@@ -449,61 +449,6 @@ export default function PDV() {
     }
   };
 
-  const printReceipt = () => {
-    if (!receiptData) return;
-    const win = window.open("", "_blank", "width=400,height=600");
-    const itemsHtml = receiptData.cart
-      .map(
-        (i) =>
-          `<tr>
-            <td style="padding:3px 0">${i.name} x${i.quantity}</td>
-            <td style="padding:3px 0;text-align:right">${brl((i.promotional_price || i.price) * i.quantity)}</td>
-          </tr>`
-      )
-      .join("");
-    win.document.write(`
-      <!DOCTYPE html>
-      <html lang="pt-BR">
-      <head>
-        <meta charset="UTF-8"/>
-        <title>Recibo</title>
-        <style>
-          body { font-family: 'Courier New', monospace; font-size: 12px; padding: 16px; max-width: 320px; margin: 0 auto; }
-          h2 { text-align: center; font-size: 16px; margin-bottom: 4px; }
-          .center { text-align: center; }
-          .divider { border: none; border-top: 1px dashed #000; margin: 8px 0; }
-          table { width: 100%; }
-          .total-row { font-weight: bold; font-size: 14px; }
-        </style>
-      </head>
-      <body>
-        <h2>${restaurant?.name || "Restaurante"}</h2>
-        <p class="center">Recibo de Venda PDV</p>
-        <p class="center">${new Date().toLocaleString("pt-BR")}</p>
-        <hr class="divider"/>
-        ${receiptData.customerName ? `<p>Cliente: ${receiptData.customerName}</p>` : ""}
-        <hr class="divider"/>
-        <table>
-          <tbody>${itemsHtml}</tbody>
-        </table>
-        <hr class="divider"/>
-        <table>
-          <tr><td>Subtotal:</td><td style="text-align:right">${brl(receiptData.subtotal)}</td></tr>
-          ${receiptData.discountAmount > 0 ? `<tr><td>Desconto:</td><td style="text-align:right">- ${brl(receiptData.discountAmount)}</td></tr>` : ""}
-          <tr class="total-row"><td>TOTAL:</td><td style="text-align:right">${brl(receiptData.total)}</td></tr>
-          <tr><td>Pagamento:</td><td style="text-align:right">${PAYMENT_METHODS.find((m) => m.value === receiptData.paymentMethod)?.label || receiptData.paymentMethod}</td></tr>
-          ${receiptData.paymentMethod === "cash" && receiptData.changeFor > 0 ? `<tr><td>Troco p/:</td><td style="text-align:right">${brl(receiptData.changeFor)}</td></tr><tr><td>Troco:</td><td style="text-align:right">${brl(receiptData.changeAmount)}</td></tr>` : ""}
-          ${receiptData.loyalty_points_earned ? `<tr><td>Pontos ganhos:</td><td style="text-align:right">+${receiptData.loyalty_points_earned} pts</td></tr>` : ""}
-        </table>
-        <hr class="divider"/>
-        <p class="center">Obrigado pela preferência!</p>
-        <script>window.onload = () => { window.print(); };</script>
-      </body>
-      </html>
-    `);
-    win.document.close();
-  };
-
   // ── Guards de caixa ──────────────────────────────────────────────────────
   if (isMobilePdv) {
     return (
@@ -514,7 +459,7 @@ export default function PDV() {
           </div>
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">PDV disponivel apenas no computador</h1>
           <p className="mt-2 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-            O PDV usa catalogo, carrinho, caixa e impressao em uma tela ampla. Acesse pelo navegador em um computador para operar com seguranca.
+            O PDV usa catalogo, carrinho e caixa em uma tela ampla. Acesse pelo navegador em um computador para operar com seguranca.
           </p>
           <div className="mt-5 rounded-xl bg-gray-50 dark:bg-gray-900/70 border border-gray-100 dark:border-gray-800 p-3 text-left">
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Disponivel no celular</p>
@@ -981,10 +926,6 @@ export default function PDV() {
               className="dark:border-gray-600 dark:text-gray-200"
             >
               Fechar
-            </Button>
-            <Button onClick={printReceipt} className="gap-2">
-              <Printer className="w-4 h-4" />
-              Imprimir Recibo
             </Button>
           </DialogFooter>
         </DialogContent>

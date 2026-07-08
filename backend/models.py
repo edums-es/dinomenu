@@ -142,13 +142,6 @@ class RestaurantSettings(BaseModel):
     twilio_auth_token: Optional[str] = None
     twilio_whatsapp_number: Optional[str] = None
     neighborhood: Optional[str] = None
-    printing_enabled: Optional[bool] = None
-    printing_trigger_status: Optional[Literal["pending", "accepted", "preparing", "ready"]] = None
-    printer_name: Optional[str] = None
-    printer_copies: Optional[int] = None
-    printer_include_customer_phone: Optional[bool] = None
-    printer_include_address: Optional[bool] = None
-    printer_include_payment: Optional[bool] = None
 
 
 # ---------- Orders ----------

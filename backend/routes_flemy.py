@@ -17,7 +17,6 @@ from flemy import (
     send_flemy_push,
 )
 from models import now_iso
-from routes_printing import enqueue_print_job
 from routes_ws import broadcast as ws_broadcast
 from whatsapp import notify_order_status
 from order_security import release_stock
@@ -183,7 +182,6 @@ async def flemy_tools(
             )
         updated = await db.orders.find_one({"id": order["id"], "restaurant_id": restaurant_id}, {"_id": 0})
         asyncio.create_task(notify_order_status(updated, "cancelled"))
-        asyncio.create_task(enqueue_print_job(updated, "auto_status"))
         asyncio.create_task(ws_broadcast(restaurant_id, "order_updated", {"id": updated["id"], "status": "cancelled"}))
         asyncio.create_task(emit_flemy_event(restaurant, "order.cancelled", updated, {"origin": "flemy"}))
         return {"ok": True, "order": public_order(updated)}
