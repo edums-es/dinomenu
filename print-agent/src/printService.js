@@ -42,21 +42,13 @@ function resolveConfigPaths(userDataDir = null) {
   const roamingAppData = process.env.APPDATA;
   const localAppData = process.env.LOCALAPPDATA;
   const appDataNames = [
-    "Dino Menu Impressora",
-    "DinoMenu Impressora",
-    "EG Delivery",
-    "EG Delivery Printer",
-    "EG Delivery Impressora",
-    "EG Delivery Impressora Automatica",
-    "eg-delivery-print-agent",
-    "egdelivery-print-agent",
+    "EG Delivery Print Link",
   ];
 
   for (const baseDir of [roamingAppData, localAppData]) {
     if (!baseDir) continue;
     for (const appName of appDataNames) {
       candidates.push(path.join(baseDir, appName, "config.json"));
-      candidates.push(path.join(baseDir, appName, "config.egdelivery.json"));
     }
   }
 
@@ -65,9 +57,7 @@ function resolveConfigPaths(userDataDir = null) {
     candidates.push(path.join(process.resourcesPath, "config.json"));
   }
 
-  candidates.push(path.join(path.dirname(process.execPath), "config.egdelivery.json"));
   candidates.push(path.join(path.dirname(process.execPath), "config.json"));
-  candidates.push(path.join(process.cwd(), "config.egdelivery.json"));
   candidates.push(path.join(process.cwd(), "config.json"));
   candidates.push(path.join(__dirname, "..", "config.json"));
 

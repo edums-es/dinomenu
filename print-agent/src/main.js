@@ -30,7 +30,7 @@ function createWindow() {
     minWidth: 420,
     minHeight: 760,
     show: false,
-    title: "EG Delivery Impressora",
+    title: "EG Delivery Print Link",
     backgroundColor: "#050807",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -69,7 +69,7 @@ function updateTray() {
   if (!tray || !service) return;
   const state = service.snapshot();
   const connected = state.connected && !state.lastError;
-  tray.setToolTip(`EG Delivery Impressora\n${state.status}`);
+  tray.setToolTip(`EG Delivery Print Link\n${state.status}`);
   tray.setImage(trayIcon(connected ? "#19d98b" : "#f5c542"));
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: "Abrir status", click: () => createWindow() },
@@ -97,7 +97,7 @@ function notify(title, body) {
 }
 
 app.whenReady().then(async () => {
-  app.setAppUserModelId("br.com.easygrowth.egdelivery.print");
+  app.setAppUserModelId("br.com.easygrowth.egdelivery.printlink");
   app.setLoginItemSettings({ openAtLogin: true, path: process.execPath });
 
   service = new PrintService({ userDataDir: app.getPath("userData") });
@@ -112,7 +112,7 @@ app.whenReady().then(async () => {
     notify("Pedido impresso", `Pedido #${job.order_number || job.id} enviado para a impressora.`);
   });
   service.on("error-log", (message) => {
-    notify("EG Delivery Impressora", message);
+    notify("EG Delivery Print Link", message);
   });
 
   updateTray();

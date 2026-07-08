@@ -1,6 +1,6 @@
-# EG Delivery Impressora
+# EG Delivery Print Link
 
-Aplicativo Windows local para imprimir pedidos automaticamente quando o EG Delivery cria jobs de impressao.
+Novo aplicativo Windows local para vincular a loja com e-mail, senha e token, buscar jobs do EG Delivery e imprimir pedidos automaticamente.
 
 ## Desenvolvimento
 
@@ -25,8 +25,9 @@ npm run printers
 
 O app procura a configuracao da loja em:
 
-- `%APPDATA%\EG Delivery Impressora\config.json`
-- `config.egdelivery.json` ao lado do instalador/executavel
+- `%APPDATA%\EG Delivery Print Link\config.json`
+- `%LOCALAPPDATA%\EG Delivery Print Link\config.json`
+- `config.json` ao lado do executavel
 - `config.json` no diretorio atual
 
 Exemplo:
@@ -51,7 +52,7 @@ npm run dist
 O instalador sai em:
 
 ```text
-print-agent/dist/EG Delivery Impressora Setup.exe
+print-agent/dist/EG Delivery Print Link Setup 2.0.0.exe
 ```
 
-Depois disso, o endpoint do painel consegue incluir esse `.exe` no pacote baixado pela loja.
+Depois disso, o endpoint do painel baixa esse `.exe` direto para a loja.

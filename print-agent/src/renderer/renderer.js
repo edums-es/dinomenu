@@ -1,17 +1,17 @@
 const els = {
-  statusDot: document.getElementById("statusDot"),
-  statusLabel: document.getElementById("statusLabel"),
-  statusHint: document.getElementById("statusHint"),
-  lastOrder: document.getElementById("lastOrder"),
-  printedCount: document.getElementById("printedCount"),
   apiInput: document.getElementById("apiInput"),
   emailInput: document.getElementById("emailInput"),
   passwordInput: document.getElementById("passwordInput"),
   tokenInput: document.getElementById("tokenInput"),
   linkStore: document.getElementById("linkStore"),
   linkFeedback: document.getElementById("linkFeedback"),
-  linkPanel: document.getElementById("linkPanel"),
+  connectionPill: document.getElementById("connectionPill"),
   versionBadge: document.getElementById("versionBadge"),
+  statusDot: document.getElementById("statusDot"),
+  statusLabel: document.getElementById("statusLabel"),
+  statusHint: document.getElementById("statusHint"),
+  lastOrder: document.getElementById("lastOrder"),
+  printedCount: document.getElementById("printedCount"),
   printerSelect: document.getElementById("printerSelect"),
   refreshPrinters: document.getElementById("refreshPrinters"),
   testPrint: document.getElementById("testPrint"),
@@ -26,30 +26,46 @@ let currentPrinter = "";
 
 function setBusy(button, busy) {
   button.disabled = busy;
-  button.style.opacity = busy ? "0.68" : "1";
+  button.style.opacity = busy ? "0.64" : "1";
+}
+
+function setConnectionPill(state, connected, hasError) {
+  els.connectionPill.className = "pill";
+  if (connected) {
+    els.connectionPill.textContent = "Conectado";
+    return;
+  }
+  if (hasError) {
+    els.connectionPill.textContent = "Erro";
+    els.connectionPill.classList.add("error");
+    return;
+  }
+  els.connectionPill.textContent = state.token ? "Aguardando" : "Precisa vincular";
+  els.connectionPill.classList.add("offline");
 }
 
 function renderState(state = {}) {
   const hasError = Boolean(state.lastError);
   const connected = Boolean(state.connected) && !hasError;
-  const needsLink = hasError || !state.token || state.status === "Token da loja nao encontrado";
-  currentPrinter = state.printerName === "Impressora padrao do Windows" ? "" : state.printerName || "";
 
-  els.statusDot.className = `status-dot ${connected ? "ok" : hasError ? "error" : ""}`;
-  els.statusLabel.textContent = state.status || "Iniciando";
+  currentPrinter = state.printerName === "Impressora padrao do Windows" ? "" : state.printerName || "";
+  els.versionBadge.textContent = state.appVersion ? `v${state.appVersion}` : "v2";
+  setConnectionPill(state, connected, hasError);
+
+  els.statusDot.className = `dot ${connected ? "ok" : hasError ? "error" : ""}`;
+  els.statusLabel.textContent = state.status || "Aguardando";
   els.statusHint.textContent = connected
-    ? `Conectado${state.restaurantName ? ` a ${state.restaurantName}` : " ao EG Delivery"} e aguardando pedidos.`
-    : hasError
-      ? "Confira URL/API, e-mail, senha, token, internet ou impressora."
-      : "Aguardando conexao com a loja.";
+    ? `Sincronizado${state.restaurantName ? ` com ${state.restaurantName}` : ""}.`
+    : state.token
+      ? "Token salvo. Conferindo conexao e fila de pedidos."
+      : "Informe e-mail, senha e token para ativar este computador.";
+
   els.lastOrder.textContent = state.lastOrder ? `#${state.lastOrder}` : "-";
   els.printedCount.textContent = String(state.printedCount || 0);
-  els.versionBadge.textContent = state.appVersion ? `v${state.appVersion}` : "";
 
   if (!els.apiInput.value) els.apiInput.value = state.api || "https://api.easygrowth.com.br/api";
   if (!els.emailInput.value && state.email) els.emailInput.value = state.email;
   if (!els.tokenInput.value && state.token) els.tokenInput.value = state.token;
-  els.linkPanel.classList.toggle("needs-link", needsLink);
 
   els.errorBox.classList.toggle("hidden", !hasError);
   els.errorText.textContent = state.lastError || "";
@@ -62,7 +78,7 @@ function renderState(state = {}) {
 async function loadPrinters() {
   const selected = currentPrinter || els.printerSelect.value;
   const printers = await window.egPrint.listPrinters();
-  els.printerSelect.innerHTML = '<option value="">Impressora padrao do Windows</option>';
+  els.printerSelect.innerHTML = '<option value="">Padrao do Windows</option>';
   printers.forEach((printer) => {
     const option = document.createElement("option");
     option.value = printer;
@@ -74,6 +90,26 @@ async function loadPrinters() {
   }
 }
 
+els.linkStore.addEventListener("click", async () => {
+  setBusy(els.linkStore, true);
+  els.linkFeedback.textContent = "Validando conta e token...";
+  try {
+    const state = await window.egPrint.linkStore({
+      api: els.apiInput.value,
+      email: els.emailInput.value,
+      password: els.passwordInput.value,
+      token: els.tokenInput.value,
+    });
+    els.passwordInput.value = "";
+    renderState(state);
+    els.linkFeedback.textContent = "Loja conectada. A impressao automatica ja pode buscar pedidos.";
+  } catch (error) {
+    els.linkFeedback.textContent = error?.message || "Nao foi possivel conectar.";
+  } finally {
+    setBusy(els.linkStore, false);
+  }
+});
+
 els.refreshPrinters.addEventListener("click", async () => {
   setBusy(els.refreshPrinters, true);
   try {
@@ -84,27 +120,7 @@ els.refreshPrinters.addEventListener("click", async () => {
 });
 
 els.printerSelect.addEventListener("change", async () => {
-  await window.egPrint.setPrinter(els.printerSelect.value);
-});
-
-els.linkStore.addEventListener("click", async () => {
-  setBusy(els.linkStore, true);
-  els.linkFeedback.textContent = "Entrando, validando token e conectando...";
-  try {
-    const state = await window.egPrint.linkStore({
-      api: els.apiInput.value,
-      email: els.emailInput.value,
-      password: els.passwordInput.value,
-      token: els.tokenInput.value,
-    });
-    renderState(state);
-    els.passwordInput.value = "";
-    els.linkFeedback.textContent = "Conta e token validados. Conexao reiniciada.";
-  } catch (error) {
-    els.linkFeedback.textContent = error?.message || "Nao foi possivel conectar a loja.";
-  } finally {
-    setBusy(els.linkStore, false);
-  }
+  renderState(await window.egPrint.setPrinter(els.printerSelect.value));
 });
 
 els.testPrint.addEventListener("click", async () => {

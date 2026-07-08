@@ -3,83 +3,93 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>EG Delivery Impressora</title>
+    <title>EG Delivery Print Link</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="shell">
-      <header class="topbar">
-        <div class="brand-mark">EG</div>
+    <main class="app">
+      <header class="hero">
+        <div class="logo">EG</div>
         <div>
-          <strong>EG Delivery</strong>
-          <span>Impressora automatica</span>
+          <p class="eyebrow">Novo aplicativo de impressao</p>
+          <h1>EG Delivery Print Link</h1>
+          <p class="sub">Conecte a loja com e-mail, senha e token. Depois disso o app busca pedidos e imprime sozinho.</p>
         </div>
-        <span id="versionBadge" class="version-badge">v...</span>
+        <span id="versionBadge" class="version">v2</span>
       </header>
 
-      <section id="linkPanel" class="panel link-panel">
-        <div class="panel-heading">
+      <section class="panel connect-panel">
+        <div class="section-title">
           <div>
-            <h2>Vincular impressora a loja</h2>
-            <p class="muted">Entre com a conta do EG Delivery e cole o token de impressao do painel. Sem isso o app nao busca pedidos.</p>
+            <h2>Conectar loja</h2>
+            <p>Preencha a conta do EG Delivery e o token da aba Impressao.</p>
           </div>
+          <span id="connectionPill" class="pill">Desconectado</span>
         </div>
-        <div class="link-grid">
-          <div>
-            <label for="apiInput">URL/API</label>
+
+        <div class="form-grid">
+          <label>
+            URL da API
             <input id="apiInput" type="url" placeholder="https://api.easygrowth.com.br/api" autocomplete="off" />
-          </div>
-          <div>
-            <label for="emailInput">E-mail da conta</label>
+          </label>
+          <label>
+            E-mail
             <input id="emailInput" type="email" placeholder="email@loja.com.br" autocomplete="username" />
-          </div>
-          <div>
-            <label for="passwordInput">Senha</label>
+          </label>
+          <label>
+            Senha
             <input id="passwordInput" type="password" placeholder="Senha do EG Delivery" autocomplete="current-password" />
-          </div>
-          <div>
-            <label for="tokenInput">Token da loja</label>
-            <input id="tokenInput" type="password" placeholder="Cole o token do programa" autocomplete="off" />
-          </div>
+          </label>
+          <label>
+            Token da loja
+            <input id="tokenInput" type="text" placeholder="Cole o token de impressao" autocomplete="off" />
+          </label>
         </div>
-        <button id="linkStore" class="primary full-width">Entrar, validar token e conectar</button>
-        <p id="linkFeedback" class="muted feedback"></p>
+
+        <button id="linkStore" class="primary">Entrar e sincronizar impressora</button>
+        <p id="linkFeedback" class="feedback"></p>
       </section>
 
-      <section class="status-card">
-        <div class="status-row">
-          <span id="statusDot" class="status-dot"></span>
-          <div>
-            <p id="statusLabel" class="status-label">Iniciando</p>
-            <p id="statusHint" class="muted">Verificando conexao com a loja.</p>
+      <section class="grid">
+        <section class="panel status-panel">
+          <div class="section-title">
+            <div>
+              <h2>Status</h2>
+              <p id="statusHint">Aguardando vinculo com a loja.</p>
+            </div>
+            <span id="statusDot" class="dot"></span>
           </div>
-        </div>
-        <div class="metrics">
-          <div>
-            <span>Ultimo pedido</span>
-            <strong id="lastOrder">-</strong>
+          <strong id="statusLabel" class="status-label">Iniciando</strong>
+          <div class="metrics">
+            <div>
+              <span>Ultimo pedido</span>
+              <strong id="lastOrder">-</strong>
+            </div>
+            <div>
+              <span>Impressos</span>
+              <strong id="printedCount">0</strong>
+            </div>
           </div>
-          <div>
-            <span>Impressos</span>
-            <strong id="printedCount">0</strong>
-          </div>
-        </div>
-      </section>
+        </section>
 
-      <section class="panel">
-        <label for="printerSelect">Impressora</label>
-        <div class="printer-row">
-          <select id="printerSelect">
-            <option value="">Impressora padrao do Windows</option>
-          </select>
-          <button id="refreshPrinters" class="icon-button" title="Atualizar impressoras">R</button>
-        </div>
-        <p class="muted">Deixe como padrao se a loja usa so uma impressora.</p>
-      </section>
-
-      <section class="actions">
-        <button id="testPrint" class="primary">Testar impressao</button>
-        <button id="restart" class="secondary">Reiniciar conexao</button>
+        <section class="panel printer-panel">
+          <div class="section-title">
+            <div>
+              <h2>Impressora</h2>
+              <p>Escolha a impressora local deste computador.</p>
+            </div>
+          </div>
+          <div class="printer-row">
+            <select id="printerSelect">
+              <option value="">Padrao do Windows</option>
+            </select>
+            <button id="refreshPrinters" class="icon-button" title="Atualizar impressoras">Atualizar</button>
+          </div>
+          <div class="button-row">
+            <button id="testPrint" class="primary">Testar impressao</button>
+            <button id="restart" class="secondary">Reiniciar busca</button>
+          </div>
+        </section>
       </section>
 
       <section id="errorBox" class="error-box hidden">
@@ -89,7 +99,7 @@
 
       <footer>
         <button id="openLogs" class="ghost">Abrir logs</button>
-        <button id="hideWindow" class="ghost">Ocultar</button>
+        <button id="hideWindow" class="ghost">Ocultar na bandeja</button>
       </footer>
     </main>
     <script src="./renderer.js"></script>
