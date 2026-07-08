@@ -50,6 +50,7 @@ def _find_windows_setup() -> Optional[Path]:
     legacy_matches = []
     for folder in candidates:
         if folder.exists():
+            preferred_matches.extend(folder.glob("EG Delivery Print Link *.exe"))
             preferred_matches.extend(folder.glob("EG Delivery Print Link Setup*.exe"))
             preferred_matches.extend(folder.glob("EG Delivery Impressora Setup*.exe"))
             legacy_matches.extend(folder.glob("Dino Menu Impressora Setup*.exe"))
@@ -529,7 +530,7 @@ async def download_print_agent(user=Depends(require_restaurant)):
     if not setup_exe:
         raise HTTPException(
             500,
-            "Instalador Windows nao encontrado no servidor. Gere print-agent/dist/EG Delivery Print Link Setup.exe antes do deploy.",
+            "Aplicativo Windows nao encontrado no servidor. Gere print-agent/dist/EG Delivery Print Link 2.0.1.exe antes do deploy.",
         )
     return FileResponse(
         setup_exe,

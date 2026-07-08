@@ -1,6 +1,6 @@
 {
   "name": "eg-delivery-print-agent",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "private": true,
   "description": "Aplicativo local de impressao automatica do EG Delivery.",
   "author": "EG Delivery",
@@ -20,7 +20,7 @@
   "build": {
     "appId": "br.com.easygrowth.egdelivery.printlink",
     "productName": "EG Delivery Print Link",
-    "artifactName": "${productName} Setup ${version}.${ext}",
+    "artifactName": "${productName} ${version}.${ext}",
     "electronDist": "node_modules/electron/dist",
     "directories": {
       "output": "dist"
@@ -35,7 +35,7 @@
       "signAndEditExecutable": false,
       "target": [
         {
-          "target": "nsis",
+          "target": "portable",
           "arch": [
             "x64"
           ]

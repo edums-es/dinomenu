@@ -34,6 +34,7 @@ print-agent/dist/*
 !print-agent/dist/Dino Menu Impressora Setup.exe
 !print-agent/dist/EG Delivery Impressora Setup*.exe
 !print-agent/dist/EG Delivery Print Link Setup*.exe
+!print-agent/dist/EG Delivery Print Link *.exe
 
 # Environment files (comprehensive coverage)
 

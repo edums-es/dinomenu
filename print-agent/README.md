@@ -42,17 +42,17 @@ Exemplo:
 }
 ```
 
-## Gerar instalador
+## Gerar executavel
 
 ```powershell
 npm install
 npm run dist
 ```
 
-O instalador sai em:
+O executavel portatil sai em:
 
 ```text
-print-agent/dist/EG Delivery Print Link Setup 2.0.0.exe
+print-agent/dist/EG Delivery Print Link 2.0.1.exe
 ```
 
-Depois disso, o endpoint do painel baixa esse `.exe` direto para a loja.
+Depois disso, o endpoint do painel baixa esse `.exe` direto para a loja, sem instalador.
