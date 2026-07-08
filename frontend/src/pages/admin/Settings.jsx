@@ -162,7 +162,7 @@ export default function Settings() {
       });
       const disposition = headers?.["content-disposition"] || "";
       const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
-      const filename = match ? decodeURIComponent(match[1].replace(/"/g, "")) : "EG Delivery Impressora Setup 1.1.2.exe";
+      const filename = match ? decodeURIComponent(match[1].replace(/"/g, "")) : "EG Delivery Impressora Setup 1.1.3.exe";
       const url = URL.createObjectURL(new Blob([data], { type: "application/octet-stream" }));
       const link = document.createElement("a");
       link.href = url;

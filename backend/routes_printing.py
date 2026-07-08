@@ -2,6 +2,7 @@
 import io
 import json
 import os
+import re
 import secrets
 import zipfile
 from datetime import datetime, timezone, timedelta
@@ -56,7 +57,12 @@ def _find_windows_setup() -> Optional[Path]:
         matches = [p for p in legacy_matches if p.exists()]
     if not matches:
         return None
-    return sorted(matches, key=lambda p: p.stat().st_mtime, reverse=True)[0]
+    def setup_sort_key(path: Path):
+        version_match = re.search(r"Setup\s+(\d+)\.(\d+)\.(\d+)", path.name)
+        version = tuple(int(part) for part in version_match.groups()) if version_match else (0, 0, 0)
+        return version, path.stat().st_mtime
+
+    return sorted(matches, key=setup_sort_key, reverse=True)[0]
 
 
 class PrintingSettingsIn(BaseModel):
