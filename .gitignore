@@ -35,6 +35,11 @@ print-agent/dist/*
 !print-agent/dist/EG Delivery Impressora Setup*.exe
 !print-agent/dist/EG Delivery Print Link Setup*.exe
 !print-agent/dist/EG Delivery Print Link *.exe
+print-agent-python/.venv/
+print-agent-python/build/
+print-agent-python/*.spec
+print-agent-python/dist/*
+!print-agent-python/dist/EG Delivery Print Link PY*.exe
 
 # Environment files (comprehensive coverage)
 

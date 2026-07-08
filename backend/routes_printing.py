@@ -40,27 +40,35 @@ def _find_windows_setup() -> Optional[Path]:
     candidates = [
         here.parent / "installers",
         here.parent / "print-agent" / "dist",
+        here.parent / "print-agent-python" / "dist",
         here.parents[1] / "print-agent" / "dist",
+        here.parents[1] / "print-agent-python" / "dist",
         here.parents[0] / "print-agent" / "dist",
+        here.parents[0] / "print-agent-python" / "dist",
         Path.cwd() / "print-agent" / "dist",
+        Path.cwd() / "print-agent-python" / "dist",
         Path.cwd() / "installers",
         Path.cwd() / "dist",
     ]
+    python_matches = []
     preferred_matches = []
     legacy_matches = []
     for folder in candidates:
         if folder.exists():
+            python_matches.extend(folder.glob("EG Delivery Print Link PY*.exe"))
             preferred_matches.extend(folder.glob("EG Delivery Print Link *.exe"))
             preferred_matches.extend(folder.glob("EG Delivery Print Link Setup*.exe"))
             preferred_matches.extend(folder.glob("EG Delivery Impressora Setup*.exe"))
             legacy_matches.extend(folder.glob("Dino Menu Impressora Setup*.exe"))
-    matches = [p for p in preferred_matches if p.exists()]
+    matches = [p for p in python_matches if p.exists()]
+    if not matches:
+        matches = [p for p in preferred_matches if p.exists()]
     if not matches:
         matches = [p for p in legacy_matches if p.exists()]
     if not matches:
         return None
     def setup_sort_key(path: Path):
-        version_match = re.search(r"Setup\s+(\d+)\.(\d+)\.(\d+)", path.name)
+        version_match = re.search(r"(\d+)\.(\d+)\.(\d+)", path.name)
         version = tuple(int(part) for part in version_match.groups()) if version_match else (0, 0, 0)
         return version, path.stat().st_mtime
 
@@ -530,7 +538,7 @@ async def download_print_agent(user=Depends(require_restaurant)):
     if not setup_exe:
         raise HTTPException(
             500,
-            "Aplicativo Windows nao encontrado no servidor. Gere print-agent/dist/EG Delivery Print Link 2.0.1.exe antes do deploy.",
+            "Aplicativo Windows nao encontrado no servidor. Gere print-agent-python/dist/EG Delivery Print Link PY 1.0.0.exe antes do deploy.",
         )
     return FileResponse(
         setup_exe,

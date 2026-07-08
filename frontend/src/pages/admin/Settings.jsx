@@ -162,7 +162,7 @@ export default function Settings() {
       });
       const disposition = headers?.["content-disposition"] || "";
       const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
-      const filename = match ? decodeURIComponent(match[1].replace(/"/g, "")) : "EG Delivery Print Link 2.0.1.exe";
+      const filename = match ? decodeURIComponent(match[1].replace(/"/g, "")) : "EG Delivery Print Link PY 1.0.0.exe";
       const url = URL.createObjectURL(new Blob([data], { type: "application/octet-stream" }));
       const link = document.createElement("a");
       link.href = url;
@@ -171,7 +171,7 @@ export default function Settings() {
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      toast.success("Instalador do app proprio baixado");
+      toast.success("App de impressao baixado");
     } catch (err) {
       const detail = err?.response?.data?.detail || err?.message || "Nao foi possivel baixar o app de impressao.";
       toast.error(detail);
