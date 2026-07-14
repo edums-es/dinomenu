@@ -15,15 +15,15 @@ from models import AddressInfo, CustomerInfo, OrderIn, OrderItemIn
 from routes_public import _expected_delivery_fee
 
 
-def sample_order(order_type="delivery"):
+def sample_order(order_type="delivery", neighborhood="Bairro distante", cep=""):
     return OrderIn(
         type=order_type,
         customer=CustomerInfo(name="Cliente", phone="27999999999"),
         address=AddressInfo(
-            cep="00000-000",
+            cep=cep,
             street="Rua Teste",
             number="10",
-            neighborhood="Bairro distante",
+            neighborhood=neighborhood,
         ) if order_type == "delivery" else None,
         items=[
             OrderItemIn(
@@ -41,15 +41,44 @@ def sample_order(order_type="delivery"):
     )
 
 
-def test_delivery_always_uses_flat_fee_and_ignores_legacy_zones():
+def test_fixed_delivery_fee_remains_default_mode():
     restaurant = {
         "accepts_delivery": True,
         "flat_delivery_fee": 7.5,
-        "delivery_fee_mode": "neighborhood",
+        "delivery_fee_mode": "fixed",
         "delivery_zones": [{"neighborhood": "Centro", "fee": 99, "active": True}],
     }
 
     fee = asyncio.run(_expected_delivery_fee(restaurant, sample_order()))
+
+    assert fee == 7.5
+
+
+def test_neighborhood_delivery_fee_uses_matching_zone():
+    restaurant = {
+        "accepts_delivery": True,
+        "flat_delivery_fee": 7.5,
+        "delivery_fee_mode": "neighborhood",
+        "delivery_zones": [
+            {"name": "Centro", "aliases": "Bairro distante, Centrinho", "fee": 12, "active": True},
+            {"name": "Praia", "fee": 18, "active": True},
+        ],
+    }
+
+    fee = asyncio.run(_expected_delivery_fee(restaurant, sample_order()))
+
+    assert fee == 12
+
+
+def test_neighborhood_delivery_fee_falls_back_to_flat_fee_when_no_zone_matches():
+    restaurant = {
+        "accepts_delivery": True,
+        "flat_delivery_fee": 7.5,
+        "delivery_fee_mode": "neighborhood",
+        "delivery_zones": [{"name": "Centro", "fee": 12, "active": True}],
+    }
+
+    fee = asyncio.run(_expected_delivery_fee(restaurant, sample_order(neighborhood="Outro bairro")))
 
     assert fee == 7.5
 

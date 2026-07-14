@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import ImageUpload from "@/components/admin/ImageUpload";
 import PrintingSettings from "@/components/admin/PrintingSettings";
-import { Loader2, Save, Copy, Check } from "lucide-react";
+import { Loader2, Save, Copy, Check, Plus, Trash2, MapPin } from "lucide-react";
 import { API } from "@/lib/api";
 
 const PAYMENT_OPTIONS = ["Pix", "Dinheiro", "Cartão de crédito", "Cartão de débito", "Vale refeição"];
@@ -59,7 +59,13 @@ export default function Settings() {
         menu_muted_text_color: r.menu_muted_text_color,
         minimum_order: Number(r.minimum_order) || 0, average_delivery_time: r.average_delivery_time,
         accepts_delivery: r.accepts_delivery, accepts_pickup: r.accepts_pickup,
+        delivery_fee_mode: r.delivery_fee_mode || "fixed",
         flat_delivery_fee: Number(r.flat_delivery_fee) || 0,
+        delivery_zones: (r.delivery_zones || []).map((zone) => ({
+          ...zone,
+          fee: Number(zone.fee) || 0,
+          active: zone.active !== false,
+        })),
         quantity_discount_min_items: Number(r.quantity_discount_min_items) || 0,
         quantity_discount_percent: Number(r.quantity_discount_percent) || 0,
         payment_methods: r.payment_methods,
@@ -78,6 +84,35 @@ export default function Settings() {
 
   const setHour = (day, patch) =>
     set({ opening_hours: { ...r.opening_hours, [day]: { ...r.opening_hours[day], ...patch } } });
+
+  const deliveryZones = r?.delivery_zones || [];
+  const updateZone = (index, patch) => {
+    set({
+      delivery_zones: deliveryZones.map((zone, i) => (
+        i === index ? { ...zone, ...patch } : zone
+      )),
+    });
+  };
+  const addZone = () => {
+    set({
+      delivery_zones: [
+        ...deliveryZones,
+        {
+          id: `zone-${Date.now()}`,
+          name: "",
+          neighborhood: "",
+          aliases: "",
+          city_names: "",
+          cep_prefixes: "",
+          fee: 0,
+          active: true,
+        },
+      ],
+    });
+  };
+  const removeZone = (index) => {
+    set({ delivery_zones: deliveryZones.filter((_, i) => i !== index) });
+  };
 
   if (!r) return (
     <div className="grid place-items-center py-20">
@@ -264,15 +299,145 @@ export default function Settings() {
                 className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
             </div>
           </div>
-          <div>
-            <Label className="dark:text-gray-200">Taxa fixa de entrega (R$)</Label>
-            <Input type="number" value={r.flat_delivery_fee || 0}
-              onChange={(e) => set({ flat_delivery_fee: e.target.value })}
-              data-testid="flat-delivery-fee"
-              className="mt-1 w-40 dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              Esta taxa sera aplicada a todas as entregas, sem filtro por cidade, bairro ou regiao.
-            </p>
+          <div className="border-t border-gray-100 dark:border-gray-700 pt-4 space-y-4">
+            <div>
+              <Label className="dark:text-gray-200">Como calcular a taxa de entrega</Label>
+              <div className="grid md:grid-cols-2 gap-3 mt-2">
+                {[
+                  ["fixed", "Taxa fixa", "Mesmo valor para todas as entregas."],
+                  ["neighborhood", "Por bairro/regiao", "Valor muda conforme bairro, CEP ou regiao."],
+                ].map(([mode, title, desc]) => {
+                  const active = (r.delivery_fee_mode || "fixed") === mode;
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => set({ delivery_fee_mode: mode })}
+                      data-testid={`delivery-fee-mode-${mode}`}
+                      className={`text-left rounded-xl border p-4 transition-colors ${
+                        active
+                          ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/20"
+                          : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+                      }`}
+                    >
+                      <p className="font-semibold text-gray-900 dark:text-white">{title}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{desc}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <Label className="dark:text-gray-200">
+                {r.delivery_fee_mode === "neighborhood" ? "Taxa padrao quando nao encontrar bairro/regiao (R$)" : "Taxa fixa de entrega (R$)"}
+              </Label>
+              <Input type="number" value={r.flat_delivery_fee || 0}
+                onChange={(e) => set({ flat_delivery_fee: e.target.value })}
+                data-testid="flat-delivery-fee"
+                className="mt-1 w-48 dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                {r.delivery_fee_mode === "neighborhood"
+                  ? "Usada como fallback se o endereco nao bater com nenhuma regra cadastrada."
+                  : "Esta taxa sera aplicada a todas as entregas."}
+              </p>
+            </div>
+
+            {r.delivery_fee_mode === "neighborhood" && (
+              <div className="rounded-2xl border border-gray-200 dark:border-gray-700 p-4 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-emerald-500" />
+                      Taxas por bairro/regiao
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Cadastre nomes alternativos separados por virgula. Ex: Centro, Centrinho, Rua Principal.
+                    </p>
+                  </div>
+                  <Button type="button" onClick={addZone} variant="outline" className="rounded-xl" data-testid="add-delivery-zone">
+                    <Plus className="w-4 h-4 mr-1" /> Nova regiao
+                  </Button>
+                </div>
+
+                {deliveryZones.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 p-5 text-sm text-gray-500 dark:text-gray-400">
+                    Nenhuma regiao cadastrada. Enquanto isso, a taxa padrao continua valendo.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {deliveryZones.map((zone, index) => (
+                      <div key={zone.id || index} className="rounded-xl border border-gray-200 dark:border-gray-700 p-3 space-y-3" data-testid="delivery-zone-row">
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                            <Switch checked={zone.active !== false} onCheckedChange={(v) => updateZone(index, { active: v })} />
+                            Regiao ativa
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => removeZone(index)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 dark:border-red-900/60 dark:hover:bg-red-950/20"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Remover
+                          </button>
+                        </div>
+                        <div className="grid md:grid-cols-[1fr_140px] gap-3">
+                          <div>
+                            <Label className="dark:text-gray-200">Nome da regiao/bairro</Label>
+                            <Input
+                              value={zone.name || ""}
+                              onChange={(e) => updateZone(index, { name: e.target.value, neighborhood: e.target.value })}
+                              placeholder="Ex: Centro"
+                              className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <Label className="dark:text-gray-200">Taxa (R$)</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={zone.fee || 0}
+                              onChange={(e) => updateZone(index, { fee: e.target.value })}
+                              className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid md:grid-cols-3 gap-3">
+                          <div>
+                            <Label className="dark:text-gray-200">Apelidos/bairros inclusos</Label>
+                            <Input
+                              value={zone.aliases || ""}
+                              onChange={(e) => updateZone(index, { aliases: e.target.value })}
+                              placeholder="Ex: Centro Sul, Vila Centro"
+                              className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <Label className="dark:text-gray-200">Cidades atendidas</Label>
+                            <Input
+                              value={zone.city_names || ""}
+                              onChange={(e) => updateZone(index, { city_names: e.target.value })}
+                              placeholder="Opcional"
+                              className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                            />
+                          </div>
+                          <div>
+                            <Label className="dark:text-gray-200">Prefixos de CEP</Label>
+                            <Input
+                              value={zone.cep_prefixes || ""}
+                              onChange={(e) => updateZone(index, { cep_prefixes: e.target.value })}
+                              placeholder="Ex: 29182, 010"
+                              className="mt-1 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div className="border-t border-gray-100 dark:border-gray-700 pt-4">
             <p className="font-semibold text-sm dark:text-white">Desconto por quantidade</p>

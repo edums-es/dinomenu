@@ -516,10 +516,22 @@ def _zone_matches_cep(zone: dict, cep_digits: str) -> bool:
 
 
 def _zone_matches_address(zone: dict, address_data: dict, cep_digits: str = "") -> bool:
-    neighborhood_name = (address_data or {}).get("bairro") or ""
-    city_name = (address_data or {}).get("localidade") or ""
-    street_name = (address_data or {}).get("logradouro") or ""
-    terms = [zone.get("neighborhood"), *_split_terms(zone.get("aliases"))]
+    neighborhood_name = (
+        (address_data or {}).get("bairro")
+        or (address_data or {}).get("neighborhood")
+        or ""
+    )
+    city_name = (
+        (address_data or {}).get("localidade")
+        or (address_data or {}).get("city")
+        or ""
+    )
+    street_name = (
+        (address_data or {}).get("logradouro")
+        or (address_data or {}).get("street")
+        or ""
+    )
+    terms = [zone.get("name"), zone.get("neighborhood"), *_split_terms(zone.get("aliases"))]
     city_terms = _split_terms(zone.get("city_names"))
     return (
         any(
@@ -564,7 +576,66 @@ async def _expected_delivery_fee(restaurant: dict, order: OrderIn):
     if restaurant.get("accepts_delivery") is False:
         raise HTTPException(status_code=400, detail="Restaurante nao aceita entrega")
 
-    return float(restaurant.get("flat_delivery_fee") or 0)
+    flat_fee = float(restaurant.get("flat_delivery_fee") or 0)
+    if restaurant.get("delivery_fee_mode") != "neighborhood":
+        return flat_fee
+
+    address = order.address.model_dump() if order.address else None
+    zone = await _delivery_zone_for_address(restaurant, address)
+    if zone:
+        return float(zone.get("fee") or 0)
+
+    return flat_fee
+
+
+def _cep_digits(value: str) -> str:
+    import re
+    return re.sub(r"\D", "", value or "")
+
+
+async def _delivery_zone_for_address(restaurant: dict, address: dict | None):
+    zones = [
+        z for z in (restaurant.get("delivery_zones") or [])
+        if isinstance(z, dict) and z.get("active", True) is not False
+    ]
+    if not zones or not address:
+        return None
+
+    cep_digits = _cep_digits(address.get("cep") or "")
+    for zone in zones:
+        if _zone_matches_address(zone, address, cep_digits):
+            return zone
+
+    if len(cep_digits) == 8:
+        try:
+            via_cep = await _lookup_cep(cep_digits)
+            for zone in zones:
+                if _zone_matches_address(zone, via_cep, cep_digits):
+                    return zone
+        except HTTPException:
+            pass
+
+    return None
+
+
+@router.post("/restaurants/{slug}/delivery-fee")
+async def delivery_fee_preview(slug: str, payload: dict):
+    r = await _get_restaurant_or_404(slug)
+    address = payload.get("address") or {}
+    if r.get("accepts_delivery") is False:
+        raise HTTPException(status_code=400, detail="Restaurante nao aceita entrega")
+    zone = await _delivery_zone_for_address(r, address) if r.get("delivery_fee_mode") == "neighborhood" else None
+    fee = money(float(zone.get("fee") or 0) if zone else float(r.get("flat_delivery_fee") or 0))
+    return {
+        "delivery_fee": fee,
+        "mode": r.get("delivery_fee_mode") or "fixed",
+        "zone": {
+            "id": zone.get("id"),
+            "name": zone.get("name") or zone.get("neighborhood"),
+            "fee": float(zone.get("fee") or 0),
+        } if zone else None,
+        "fallback": zone is None and r.get("delivery_fee_mode") == "neighborhood",
+    }
 
 
 async def _notify_new_order(restaurant: dict, order: dict, order_in=None, pix_via_openpix: bool = False, order_number: int = None):

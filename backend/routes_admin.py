@@ -47,7 +47,28 @@ async def get_restaurant(user=Depends(require_restaurant)):
 @router.put("/restaurant")
 async def update_restaurant(settings: RestaurantSettings, user=Depends(require_restaurant)):
     updates = {k: v for k, v in settings.model_dump().items() if v is not None}
-    updates["delivery_fee_mode"] = "fixed"
+    if "delivery_fee_mode" in updates and updates.get("delivery_fee_mode") not in ("fixed", "neighborhood"):
+        updates["delivery_fee_mode"] = "fixed"
+    if "delivery_zones" in updates:
+        zones = []
+        for zone in updates.get("delivery_zones") or []:
+            if not isinstance(zone, dict):
+                continue
+            name = (zone.get("name") or zone.get("neighborhood") or "").strip()
+            fee = float(zone.get("fee") or 0)
+            if not name and fee <= 0:
+                continue
+            zones.append({
+                "id": zone.get("id") or new_id(),
+                "name": name,
+                "neighborhood": (zone.get("neighborhood") or name).strip(),
+                "aliases": zone.get("aliases") or "",
+                "city_names": zone.get("city_names") or "",
+                "cep_prefixes": zone.get("cep_prefixes") or "",
+                "fee": max(fee, 0),
+                "active": zone.get("active", True) is not False,
+            })
+        updates["delivery_zones"] = zones
     updates["updated_at"] = now_iso()
     await db.restaurants.update_one({"id": rid(user)}, {"$set": updates})
     r = await db.restaurants.find_one({"id": rid(user)}, {"_id": 0})

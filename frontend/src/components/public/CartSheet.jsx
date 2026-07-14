@@ -13,7 +13,7 @@ import {
 import { Minus, Plus, Trash2, MessageCircle, ShoppingBag, ArrowLeft, Ticket, Check, Copy, QrCode, Sparkles } from "lucide-react";
 import { maskPhone } from "@/lib/masks";
 import { useCart } from "@/context/CartContext";
-import api, { formatApiError } from "@/lib/api";
+import api, { API, formatApiError } from "@/lib/api";
 import { brl } from "@/lib/format";
 
 const onlyDigits = (value) => (value || "").replace(/\D/g, "");
@@ -31,6 +31,35 @@ function hexRgba(hex, alpha = 0.16) {
 const maskCep = (value) => {
   const digits = onlyDigits(value).slice(0, 8);
   return digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+};
+const normalizeText = (value) => (value || "")
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .trim()
+  .toLowerCase();
+const splitTerms = (value) => Array.isArray(value) ? value : String(value || "").split(",");
+const zoneMatchesText = (term, value) => {
+  const a = normalizeText(term);
+  const b = normalizeText(value);
+  return !!(a && b && (a === b || (a.length >= 4 && b.includes(a)) || (b.length >= 4 && a.includes(b))));
+};
+const localDeliveryQuote = (restaurant, address) => {
+  const flat = Number(restaurant?.flat_delivery_fee) || 0;
+  if (restaurant?.delivery_fee_mode !== "neighborhood") return { delivery_fee: flat, zone: null };
+  const zones = (restaurant?.delivery_zones || []).filter((zone) => zone?.active !== false);
+  const cepDigits = onlyDigits(address?.cep);
+  const match = zones.find((zone) => {
+    const terms = [zone.name, zone.neighborhood, ...splitTerms(zone.aliases)];
+    const cities = splitTerms(zone.city_names);
+    const prefixes = splitTerms(zone.cep_prefixes).map(onlyDigits).filter(Boolean);
+    return terms.some((term) => (
+      zoneMatchesText(term, address?.neighborhood)
+      || zoneMatchesText(term, address?.street)
+    ))
+      || cities.some((city) => zoneMatchesText(city, address?.city))
+      || prefixes.some((prefix) => cepDigits.startsWith(prefix));
+  });
+  return match ? { delivery_fee: Number(match.fee) || 0, zone: match } : { delivery_fee: flat, zone: null };
 };
 export default function CartSheet({ open, onOpenChange, restaurant, slug, products = [] }) {
   const { items, addItem, updateQuantity, removeItem, subtotal, clearCart } = useCart();
@@ -67,12 +96,9 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug, produc
   const [payment, setPayment] = useState(restaurant?.payment_methods?.[0] || "Dinheiro");
   const [changeFor, setChangeFor] = useState("");
   const [orderNotes, setOrderNotes] = useState("");
+  const [deliveryQuote, setDeliveryQuote] = useState(() => localDeliveryQuote(restaurant, {}));
 
-  const deliveryFee = useMemo(() => {
-    if (type !== "delivery") return 0;
-    if (coupon?.free_delivery) return 0;
-    return Number(restaurant?.flat_delivery_fee) || 0;
-  }, [type, coupon, restaurant?.flat_delivery_fee]);
+  const deliveryFee = type !== "delivery" || coupon?.free_delivery ? 0 : Number(deliveryQuote?.delivery_fee) || 0;
 
   const itemCount = items.reduce((totalItems, item) => totalItems + item.quantity, 0);
   const quantityMinItems = Number(restaurant?.quantity_discount_min_items) || 0;
@@ -162,6 +188,44 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug, produc
 
     return () => { cancelled = true; };
   }, [cep, type]);
+
+  useEffect(() => {
+    if (type !== "delivery") {
+      setDeliveryQuote({ delivery_fee: 0, zone: null });
+      return undefined;
+    }
+
+    const address = { cep, street, number, neighborhood, complement, reference };
+    setDeliveryQuote(localDeliveryQuote(restaurant, address));
+
+    if (restaurant?.delivery_fee_mode !== "neighborhood") {
+      return undefined;
+    }
+    if (!neighborhood.trim() && onlyDigits(cep).length < 8) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`${API}/public/restaurants/${slug}/delivery-fee`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address }),
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!cancelled) setDeliveryQuote(data);
+      } catch {
+        // O backend valida a taxa de novo ao finalizar. Aqui mantemos o fallback local.
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [type, cep, street, number, neighborhood, complement, reference, restaurant, slug]);
 
   useEffect(() => {
     if (isTableOrder && type !== "dine_in") {
@@ -619,7 +683,12 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug, produc
 
             <div className="pt-3 space-y-1.5 text-sm" style={{borderTop:"1px solid rgba(255,255,255,0.1)"}}>
               <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{brl(subtotal)}</span></div>
-              {type === "delivery" && <div className="flex justify-between text-gray-500"><span>Entrega</span><span>{brl(deliveryFee)}</span></div>}
+              {type === "delivery" && (
+                <div className="flex justify-between text-gray-500">
+                  <span>Entrega{deliveryQuote?.zone?.name ? ` (${deliveryQuote.zone.name})` : ""}</span>
+                  <span>{brl(deliveryFee)}</span>
+                </div>
+              )}
               {quantityDiscount > 0 && <div className="flex justify-between text-green-600"><span>Desconto por itens</span><span>-{brl(quantityDiscount)}</span></div>}
               {couponDiscount > 0 && <div className="flex justify-between text-green-600"><span>Cupom</span><span>-{brl(couponDiscount)}</span></div>}
               <div className="flex justify-between font-display font-bold text-lg"><span>Total</span><span>{brl(total)}</span></div>

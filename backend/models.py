@@ -130,7 +130,9 @@ class RestaurantSettings(BaseModel):
     accepts_pickup: Optional[bool] = None
     minimum_order: Optional[float] = None
     average_delivery_time: Optional[str] = None
+    delivery_fee_mode: Optional[Literal["fixed", "neighborhood"]] = None
     flat_delivery_fee: Optional[float] = None
+    delivery_zones: Optional[List[dict]] = None
     quantity_discount_min_items: Optional[int] = None
     quantity_discount_percent: Optional[float] = None
     payment_methods: Optional[List[str]] = None
