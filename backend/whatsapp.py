@@ -16,7 +16,11 @@ from models import now_iso
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/whatsapp", tags=["whatsapp"])
-DEFAULT_PUBLIC_URL = "https://www.marisco27.com.br"
+DEFAULT_PUBLIC_URL = "https://app.easygrowth.com.br"
+LEGACY_SHARED_PUBLIC_URLS = {
+    "https://marisco27.com.br",
+    "https://www.marisco27.com.br",
+}
 
 
 def _instance_name(restaurant_id):
@@ -38,15 +42,29 @@ async def _platform(key, fallback=""):
     return await get_platform_setting(key, os.environ.get(key.upper(), fallback))
 
 
-def _normalize_public_url(url):
+def _normalize_public_url(url, fallback=DEFAULT_PUBLIC_URL, block_shared=True):
     url = (url or DEFAULT_PUBLIC_URL).strip().rstrip("/")
-    if "localhost" in url or "127.0.0.1" in url:
-        return DEFAULT_PUBLIC_URL
+    if url and "://" not in url:
+        url = f"https://{url}"
+    if (
+        "localhost" in url
+        or "127.0.0.1" in url
+        or (block_shared and url in LEGACY_SHARED_PUBLIC_URLS)
+    ):
+        return fallback
     return url
 
 
 async def _public_url():
     return _normalize_public_url(await _platform("public_url", DEFAULT_PUBLIC_URL))
+
+
+def _restaurant_public_url(restaurant):
+    for key in ("public_url", "custom_domain", "domain", "whitelabel_domain", "menu_domain"):
+        value = (restaurant or {}).get(key)
+        if value:
+            return _normalize_public_url(value, block_shared=False)
+    return DEFAULT_PUBLIC_URL
 
 
 async def _send_via_evolution(restaurant_id, phone, message):
@@ -151,7 +169,7 @@ async def notify_order_status(order, new_status):
     default_statuses = ["accepted", "preparing", "ready", "out_for_delivery", "completed", "cancelled"]
     if new_status not in restaurant.get("wa_notify_statuses", default_statuses):
         return
-    public_url = await _public_url()
+    public_url = _restaurant_public_url(restaurant)
     tracking_url = f"{public_url}/pedido/{order.get('id', '')}"
     try:
         msg = STATUS_MESSAGES[new_status].format(
@@ -252,7 +270,7 @@ def _chatbot(text, restaurant):
         return out
     if re.search(r"\b(cardapio|menu|produto|lanche|comida)\b", q):
         slug = restaurant.get("slug", "")
-        url = _normalize_public_url(os.environ.get("PUBLIC_URL"))
+        url = _restaurant_public_url(restaurant)
         return f"Cardapio: {url}/cardapio/{slug}"
     if re.search(r"\b(obrigad|valeu|brigad)\b", q):
         return "Por nada! Bom apetite!"
