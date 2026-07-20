@@ -722,7 +722,7 @@ def _cycle_bounds(period: str, start_date: str | None, end_date: str | None):
         local_tz = timezone.utc
 
     now_local = datetime.now(local_tz)
-    if period == "custom":
+    if start_date or end_date:
         if not start_date or not end_date:
             raise HTTPException(status_code=400, detail="Informe data inicial e final")
         return _local_date_to_utc_iso(start_date, False), _local_date_to_utc_iso(end_date, True)
@@ -733,31 +733,51 @@ def _cycle_bounds(period: str, start_date: str | None, end_date: str | None):
     return start_local.astimezone(timezone.utc).isoformat(), datetime.now(timezone.utc).isoformat()
 
 
+def _current_cycle_condition():
+    return {"$or": [{"cycle_id": {"$exists": False}}, {"cycle_id": None}]}
+
+
+def _date_range_condition(start_iso: str, end_iso: str):
+    return {"created_at": {"$gte": start_iso, "$lte": end_iso}}
+
+
+def _cycle_orders_query(restaurant_id: str, start_iso: str | None = None, end_iso: str | None = None):
+    conditions = [
+        {"restaurant_id": restaurant_id},
+        _current_cycle_condition(),
+    ]
+    if start_iso and end_iso:
+        conditions.append(_date_range_condition(start_iso, end_iso))
+    return {"$and": conditions}
+
+
+def _with_terminal_status(query: dict):
+    return {"$and": [query, {"status": {"$in": list(TERMINAL_ORDER_STATUSES)}}]}
+
+
+def _with_open_status(query: dict):
+    return {"$and": [query, {"status": {"$nin": list(TERMINAL_ORDER_STATUSES)}}]}
+
+
 @router.post("/order-cycles/close")
 async def close_order_cycle(data: OrderCycleCloseIn, user=Depends(require_restaurant)):
     period = data.period if data.period in {"day", "week", "custom"} else "day"
     start_iso, end_iso = _cycle_bounds(period, data.start_date, data.end_date)
     restaurant_id = rid(user)
-    base_query = {
-        "$and": [
-            {"restaurant_id": restaurant_id},
-            {"created_at": {"$gte": start_iso, "$lte": end_iso}},
-            {"$or": [{"cycle_id": {"$exists": False}}, {"cycle_id": None}]},
-        ]
-    }
-    closable_query = {
-        "$and": [
-            base_query,
-            {"status": {"$in": list(TERMINAL_ORDER_STATUSES)}},
-        ]
-    }
+    base_query = _cycle_orders_query(restaurant_id, start_iso, end_iso)
+    closable_query = _with_terminal_status(base_query)
     orders = await db.orders.find(closable_query, {"_id": 0}).to_list(10000)
-    open_orders = await db.orders.count_documents({
-        "$and": [
-            base_query,
-            {"status": {"$nin": list(TERMINAL_ORDER_STATUSES)}},
-        ]
-    })
+    open_orders = await db.orders.count_documents(_with_open_status(base_query))
+
+    # Alguns pedidos antigos foram gravados com created_at fora do recorte local/UTC
+    # esperado. Se a tela mostra finalizados no ciclo atual, o fechamento deve limpar
+    # esses pedidos em vez de travar com falso "nenhum pedido encontrado".
+    if not orders and period != "custom" and not data.start_date and not data.end_date:
+        base_query = _cycle_orders_query(restaurant_id)
+        closable_query = _with_terminal_status(base_query)
+        orders = await db.orders.find(closable_query, {"_id": 0}).to_list(10000)
+        open_orders = await db.orders.count_documents(_with_open_status(base_query))
+
     if not orders:
         raise HTTPException(
             status_code=400,

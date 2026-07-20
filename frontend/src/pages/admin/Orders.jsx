@@ -518,7 +518,13 @@ export default function Orders() {
     if (!window.confirm(`Fechar o ciclo do ${label}? Pedidos finalizados saem do ciclo atual e continuam no historico.`)) return;
     setCycleLoading(true);
     try {
-      const { data } = await api.post("/admin/order-cycles/close", { period });
+      const payload = { period };
+      if (dateFrom && dateTo) {
+        payload.start_date = dateFrom;
+        payload.end_date = dateTo;
+        payload.label = `Fechamento ${label} (${dateFrom} a ${dateTo})`;
+      }
+      const { data } = await api.post("/admin/order-cycles/close", payload);
       toast.success(`Ciclo fechado: ${data.orders_count} pedido(s), ${brl(data.revenue)}`);
       if (data.open_orders_left > 0) {
         toast.info(`${data.open_orders_left} pedido(s) em aberto ficaram no ciclo atual`);
