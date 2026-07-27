@@ -10,7 +10,7 @@ import {
   MessageCircle, Loader2, ClipboardList,
   Clock, MapPin, User, Phone, ChevronRight, ChevronDown,
   ShoppingBag, CheckCircle2, XCircle, Bike, Bell, Search, Filter,
-  Download, Archive, CalendarClock, BarChart3, RotateCcw,
+  Download, Archive, CalendarClock, BarChart3, RotateCcw, Printer,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useOrdersWS } from "@/hooks/useOrdersWS";
@@ -96,6 +96,101 @@ function buildQueryParams({ cycleMode, statusFilter, sourceFilter, paymentFilter
   if (dateFrom) params.start_date = dateFrom;
   if (dateTo) params.end_date = dateTo;
   return params;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function printOrder(order) {
+  const win = window.open("", "_blank", "width=420,height=720");
+  if (!win) {
+    toast.error("Permita pop-ups para imprimir o pedido");
+    return;
+  }
+  const customer = order.customer || {};
+  const address = order.address || {};
+  const items = (order.items || []).map((item) => `
+    <div class="item">
+      <div>
+        <strong>${escapeHtml(item.quantity || 1)}x ${escapeHtml(item.product_name)}</strong>
+        ${(item.options || []).map((op) => `<div class="sub">+ ${escapeHtml(op.name)} ${Number(op.price || 0) > 0 ? escapeHtml(brl(op.price)) : ""}</div>`).join("")}
+        ${item.notes ? `<div class="sub">Obs: ${escapeHtml(item.notes)}</div>` : ""}
+      </div>
+      <strong>${escapeHtml(brl(item.total_price || 0))}</strong>
+    </div>
+  `).join("");
+  const addressLine = order.type === "delivery"
+    ? [
+        address.street && `${address.street}, ${address.number || ""}`,
+        address.neighborhood,
+        address.complement && `Compl: ${address.complement}`,
+        address.reference && `Ref: ${address.reference}`,
+      ].filter(Boolean).map(escapeHtml).join("<br>")
+    : escapeHtml(orderTypeLabel(order));
+
+  win.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <title>Pedido #${escapeHtml(order.order_number)}</title>
+        <style>
+          * { box-sizing: border-box; }
+          body { margin: 0; padding: 16px; font-family: Arial, sans-serif; color: #111; }
+          .receipt { max-width: 320px; margin: 0 auto; }
+          h1 { font-size: 20px; margin: 0 0 4px; text-align: center; }
+          .muted { color: #555; font-size: 12px; }
+          .center { text-align: center; }
+          .section { border-top: 1px dashed #999; margin-top: 12px; padding-top: 10px; }
+          .row, .item { display: flex; justify-content: space-between; gap: 12px; }
+          .item { margin: 8px 0; }
+          .sub { font-size: 12px; color: #555; margin-top: 2px; }
+          .total { font-size: 18px; font-weight: 800; }
+          @media print {
+            body { padding: 0; }
+            .receipt { max-width: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="receipt">
+          <h1>Pedido #${escapeHtml(order.order_number)}</h1>
+          <div class="center muted">${escapeHtml(STATUS_LABEL[order.status] || order.status || "")} - ${escapeHtml(shortDateTime(order.created_at))}</div>
+          <div class="section">
+            <strong>${escapeHtml(customer.name || "Cliente")}</strong><br>
+            ${customer.phone ? `<span>${escapeHtml(customer.phone)}</span><br>` : ""}
+            <span>${addressLine}</span>
+          </div>
+          <div class="section">
+            ${items || "<div class='muted'>Sem itens</div>"}
+          </div>
+          <div class="section">
+            <div class="row"><span>Subtotal</span><span>${escapeHtml(brl(order.subtotal || 0))}</span></div>
+            <div class="row"><span>Entrega</span><span>${escapeHtml(brl(order.delivery_fee || 0))}</span></div>
+            ${Number(order.discount || 0) > 0 ? `<div class="row"><span>Desconto</span><span>-${escapeHtml(brl(order.discount))}</span></div>` : ""}
+            <div class="row total"><span>Total</span><span>${escapeHtml(brl(order.total || 0))}</span></div>
+          </div>
+          <div class="section">
+            <strong>Pagamento:</strong> ${escapeHtml(order.payment_method || "-")}
+            ${order.change_for ? `<br><strong>Troco para:</strong> ${escapeHtml(brl(order.change_for))}` : ""}
+            ${order.customer_notes ? `<br><strong>Obs:</strong> ${escapeHtml(order.customer_notes)}` : ""}
+          </div>
+        </div>
+        <script>
+          window.onload = function() {
+            window.focus();
+            window.print();
+          };
+        </script>
+      </body>
+    </html>
+  `);
+  win.document.close();
 }
 
 function OrderCard({ order, onSelect, onStatusChange }) {
@@ -313,6 +408,13 @@ function OrderModal({ order, onClose, onStatusChange }) {
 
           {/* Contact */}
           <div className="flex gap-2 pt-1">
+            <Button
+              variant="outline"
+              onClick={() => printOrder(order)}
+              className="flex-1 dark:border-gray-700 dark:text-gray-200"
+            >
+              <Printer className="w-4 h-4 mr-1" /> Imprimir
+            </Button>
             {order.customer?.phone && (
               <a href={`https://wa.me/55${order.customer.phone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" className="flex-1">
                 <Button variant="outline" className="w-full text-green-600 border-green-200 hover:bg-green-50">
