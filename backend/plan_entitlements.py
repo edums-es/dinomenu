@@ -55,6 +55,7 @@ def normalize_plan_payload(plan: dict | None) -> dict:
     data["feature_flags"] = normalize_feature_flags(data.get("feature_flags"))
     data["billing_options"] = normalize_billing_options(data.get("billing_options"))
     data["plan_type"] = data.get("plan_type") or "subscription"
+    data["is_public"] = data.get("is_public", True) is not False
     data["updates_policy"] = data.get("updates_policy") or (
         "paid_upgrades" if data["plan_type"] == "legacy_lifetime" else "included"
     )

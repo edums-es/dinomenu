@@ -39,6 +39,7 @@ const EMPTY_PLAN = {
   color: "#6366f1",
   is_active: true,
   is_featured: false,
+  is_public: true,
   plan_type: "subscription",
   updates_policy: "included",
   billing_options: { monthly: true, yearly: true, lifetime: false },
@@ -255,7 +256,19 @@ function PlanModal({ plan, catalog, onClose, onSaved }) {
             <div className="bg-[#0F131A] border border-white/5 rounded-2xl p-4 space-y-4">
               <SectionTitle icon={Lock} title="Contrato e updates" subtitle="Use vitalicio legado para clientes antigos sem updates futuros inclusos." />
               <Field label="Tipo de contrato">
-                <SelectInput value={form.plan_type} onChange={(e) => set("plan_type", e.target.value)}>
+                <SelectInput
+                  value={form.plan_type}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setForm((prev) => ({
+                      ...prev,
+                      plan_type: value,
+                      updates_policy: value === "legacy_lifetime" ? "paid_upgrades" : prev.updates_policy,
+                      is_public: value === "legacy_lifetime" ? false : prev.is_public,
+                      billing_options: value === "legacy_lifetime" ? { ...prev.billing_options, lifetime: true } : prev.billing_options,
+                    }));
+                  }}
+                >
                   <option value="subscription">Mensal / anual normal</option>
                   <option value="legacy_lifetime">Vitalicio legado</option>
                 </SelectInput>
@@ -278,6 +291,10 @@ function PlanModal({ plan, catalog, onClose, onSaved }) {
                 <label className="flex items-center gap-2 cursor-pointer">
                   <Switch checked={form.is_featured} onChange={(v) => set("is_featured", v)} />
                   <span className="text-sm text-gray-300">Destaque</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Switch checked={!form.is_public} onChange={(v) => set("is_public", !v)} />
+                  <span className="text-sm text-gray-300">Oculto</span>
                 </label>
               </div>
             </div>
@@ -683,6 +700,7 @@ export default function Plans() {
                       <div className="flex items-center gap-2 flex-wrap mt-1">
                         {plan.is_featured && <span className="inline-flex items-center gap-1 text-xs text-yellow-400 bg-yellow-500/10 px-2 py-0.5 rounded-full"><Star className="w-3 h-3" /> Destaque</span>}
                         {legacy && <span className="inline-flex items-center gap-1 text-xs text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-full"><Lock className="w-3 h-3" /> Vitalicio legado</span>}
+                        {plan.is_public === false && <span className="inline-flex items-center gap-1 text-xs text-sky-300 bg-sky-500/10 px-2 py-0.5 rounded-full"><Lock className="w-3 h-3" /> Oculto</span>}
                       </div>
                     </div>
                     <Badge active={plan.is_active} />

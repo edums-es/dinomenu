@@ -29,6 +29,7 @@ class PlanIn(BaseModel):
     color: str = "#6366f1"
     is_active: bool = True
     is_featured: bool = False
+    is_public: bool = True
     plan_type: Literal["subscription", "legacy_lifetime"] = "subscription"
     updates_policy: Literal["included", "paid_upgrades"] = "included"
     billing_options: Dict[str, bool] = {"monthly": True, "yearly": True, "lifetime": False}
@@ -167,11 +168,27 @@ class SubscriptionIn(BaseModel):
     restaurant_id: str
     plan_id: str
     billing_cycle: Literal["monthly", "yearly", "lifetime"] = "monthly"
+    cycle: Optional[Literal["monthly", "yearly", "lifetime"]] = None
     amount: Optional[float] = None
     payment_method: Optional[str] = None
     affiliate_code: Optional[str] = None
     reseller_id: Optional[str] = None
     trial_days: int = 0
+    notes: Optional[str] = None
+
+
+class SubscriptionUpdateIn(BaseModel):
+    restaurant_id: Optional[str] = None
+    plan_id: Optional[str] = None
+    billing_cycle: Optional[Literal["monthly", "yearly", "lifetime"]] = None
+    cycle: Optional[Literal["monthly", "yearly", "lifetime"]] = None
+    amount: Optional[float] = None
+    payment_method: Optional[str] = None
+    affiliate_code: Optional[str] = None
+    reseller_id: Optional[str] = None
+    trial_days: Optional[int] = None
+    expires_at: Optional[str] = None
+    status: Optional[Literal["active", "suspended", "cancelled", "trial", "overdue"]] = None
     notes: Optional[str] = None
 
 @router.get("/subscriptions")
@@ -187,12 +204,18 @@ async def list_subscriptions(
     subs = await db.subscriptions.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
     # Enrich
     for s in subs:
-        r = await db.restaurants.find_one({"id": s.get("restaurant_id")}, {"name": 1, "slug": 1, "_id": 0})
-        s["restaurant_name"] = r["name"] if r else "—"
+        r = await db.restaurants.find_one({"id": s.get("restaurant_id")}, {"id": 1, "name": 1, "slug": 1, "_id": 0})
+        s["restaurant_name"] = r["name"] if r else "--"
         s["restaurant_slug"] = r.get("slug", "") if r else ""
-        p = await db.plans.find_one({"id": s.get("plan_id")}, {"name": 1, "color": 1, "_id": 0})
-        s["plan_name"] = p["name"] if p else "—"
+        s["restaurant"] = r or {"name": s["restaurant_name"], "slug": s["restaurant_slug"]}
+        p = await db.plans.find_one(
+            {"id": s.get("plan_id")},
+            {"id": 1, "name": 1, "slug": 1, "color": 1, "plan_type": 1, "is_public": 1, "_id": 0},
+        )
+        s["plan_name"] = p["name"] if p else "--"
         s["plan_color"] = p.get("color", "#6366f1") if p else "#6366f1"
+        s["plan"] = p or {"name": s["plan_name"], "color": s["plan_color"]}
+        s["cycle"] = s.get("billing_cycle", "monthly")
     if search:
         sq = search.lower()
         subs = [s for s in subs if sq in (s.get("restaurant_name") or "").lower()]
@@ -200,6 +223,7 @@ async def list_subscriptions(
 
 @router.post("/subscriptions")
 async def create_subscription(data: SubscriptionIn, user=Depends(SUPER)):
+    billing_cycle = data.cycle or data.billing_cycle
     restaurant = await db.restaurants.find_one({"id": data.restaurant_id})
     if not restaurant: raise HTTPException(404, "Restaurante não encontrado")
     plan = await db.plans.find_one({"id": data.plan_id})
@@ -207,13 +231,18 @@ async def create_subscription(data: SubscriptionIn, user=Depends(SUPER)):
 
     amount = data.amount
     if amount is None:
-        amount = plan["price_yearly"] if data.billing_cycle == "yearly" else plan["price_monthly"]
+        if billing_cycle == "lifetime":
+            amount = plan.get("price_lifetime") or plan.get("price_yearly") or plan.get("price_monthly") or 0
+        elif billing_cycle == "yearly":
+            amount = plan.get("price_yearly") or 0
+        else:
+            amount = plan.get("price_monthly") or 0
 
     now = _now()
     trial_end = _iso(now + timedelta(days=data.trial_days)) if data.trial_days > 0 else None
-    if data.billing_cycle == "monthly":
+    if billing_cycle == "monthly":
         expires_at = _iso(now + timedelta(days=30))
-    elif data.billing_cycle == "yearly":
+    elif billing_cycle == "yearly":
         expires_at = _iso(now + timedelta(days=365))
     else:
         expires_at = None  # lifetime
@@ -234,7 +263,7 @@ async def create_subscription(data: SubscriptionIn, user=Depends(SUPER)):
         "restaurant_id": data.restaurant_id,
         "plan_id": data.plan_id,
         "status": "trial" if data.trial_days > 0 else "active",
-        "billing_cycle": data.billing_cycle,
+        "billing_cycle": billing_cycle,
         "amount": amount,
         "payment_method": data.payment_method,
         "affiliate_id": affiliate_id,
@@ -248,8 +277,87 @@ async def create_subscription(data: SubscriptionIn, user=Depends(SUPER)):
     }
     await db.subscriptions.insert_one(doc)
     # Update restaurant plan
-    await db.restaurants.update_one({"id": data.restaurant_id}, {"$set": {"plan": plan["slug"], "status": "active"}})
+    await db.restaurants.update_one({"id": data.restaurant_id}, {"$set": {"plan": plan["slug"], "billing_cycle": billing_cycle, "status": "active"}})
     return clean(doc)
+
+
+@router.put("/subscriptions/{sid}")
+async def update_subscription(sid: str, data: SubscriptionUpdateIn, user=Depends(SUPER)):
+    sub = await db.subscriptions.find_one({"id": sid})
+    if not sub:
+        raise HTTPException(404, "Assinatura nao encontrada")
+
+    restaurant_id = data.restaurant_id or sub.get("restaurant_id")
+    restaurant = await db.restaurants.find_one({"id": restaurant_id})
+    if not restaurant:
+        raise HTTPException(404, "Restaurante nao encontrado")
+
+    plan_id = data.plan_id or sub.get("plan_id")
+    plan = await db.plans.find_one({"id": plan_id})
+    if not plan:
+        raise HTTPException(404, "Plano nao encontrado")
+
+    billing_cycle = data.cycle or data.billing_cycle or sub.get("billing_cycle", "monthly")
+    amount = data.amount
+    if amount is None:
+        amount = sub.get("amount")
+    if amount is None:
+        if billing_cycle == "lifetime":
+            amount = plan.get("price_lifetime") or plan.get("price_yearly") or plan.get("price_monthly") or 0
+        elif billing_cycle == "yearly":
+            amount = plan.get("price_yearly") or 0
+        else:
+            amount = plan.get("price_monthly") or 0
+
+    expires_at = data.expires_at
+    if billing_cycle == "lifetime":
+        expires_at = None
+    elif expires_at is None:
+        expires_at = sub.get("expires_at")
+        if not expires_at or sub.get("billing_cycle") == "lifetime":
+            days = 365 if billing_cycle == "yearly" else 30
+            expires_at = _iso(_now() + timedelta(days=days))
+
+    patch = {
+        "restaurant_id": restaurant_id,
+        "plan_id": plan_id,
+        "billing_cycle": billing_cycle,
+        "amount": amount,
+        "expires_at": expires_at,
+        "next_billing_at": expires_at,
+        "updated_at": now_iso(),
+    }
+    optional = {
+        "payment_method": data.payment_method,
+        "affiliate_code": data.affiliate_code,
+        "reseller_id": data.reseller_id,
+        "trial_days": data.trial_days,
+        "status": data.status,
+        "notes": data.notes,
+    }
+    for key, value in optional.items():
+        if value is not None:
+            patch[key] = value
+    if data.trial_days and data.trial_days > 0:
+        patch["trial_ends_at"] = _iso(_now() + timedelta(days=data.trial_days))
+        patch.setdefault("status", "trial")
+
+    await db.subscriptions.update_one({"id": sid}, {"$set": patch})
+    if patch.get("status", sub.get("status")) in ("active", "trial"):
+        await db.restaurants.update_one(
+            {"id": restaurant_id},
+            {"$set": {"plan": plan["slug"], "billing_cycle": billing_cycle, "status": "active", "updated_at": now_iso()}},
+        )
+    return await db.subscriptions.find_one({"id": sid}, {"_id": 0})
+
+
+@router.delete("/subscriptions/{sid}")
+async def delete_subscription(sid: str, user=Depends(SUPER)):
+    sub = await db.subscriptions.find_one({"id": sid})
+    if not sub:
+        raise HTTPException(404, "Assinatura nao encontrada")
+    await db.subscriptions.delete_one({"id": sid})
+    return {"ok": True}
 
 @router.put("/subscriptions/{sid}/status")
 async def update_subscription_status(sid: str, body: dict, user=Depends(SUPER)):
