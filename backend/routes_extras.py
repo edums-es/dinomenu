@@ -1,5 +1,7 @@
 """Extra systems: Stock, Combos, Loyalty, Wholesale, Customers CRM, PDV."""
 import asyncio
+import csv
+import io
 import math
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -325,46 +327,233 @@ async def public_merchant_register(restaurant_id: str, data: WholesaleMerchantIn
 # CUSTOMERS CRM
 # ═══════════════════════════════════════════════════════════════════════════
 
-@router.get("/customers")
-async def list_customers(
-    user=Depends(require_restaurant),
-    search: str = Query(""),
-    page: int = Query(1, ge=1),
-    per_page: int = Query(30, le=100),
-):
+LEAD_SEGMENTS = {
+    "vip": {"label": "VIP", "priority": 6},
+    "hot": {"label": "Quente", "priority": 5},
+    "new": {"label": "Novo", "priority": 4},
+    "active": {"label": "Ativo", "priority": 3},
+    "at_risk": {"label": "Em risco", "priority": 2},
+    "lost": {"label": "Perdido", "priority": 1},
+    "cancelled_only": {"label": "So cancelou", "priority": 0},
+}
+
+LEAD_STATUS_LABELS = {
+    "none": "Sem acao",
+    "to_contact": "Contatar",
+    "negotiating": "Em conversa",
+    "won": "Convertido",
+    "paused": "Pausado",
+}
+
+
+def _parse_dt(value):
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def _days_since(value):
+    dt = _parse_dt(value)
+    if not dt:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return max(0, (datetime.now(timezone.utc) - dt).days)
+
+
+def _lead_segment(customer):
+    valid_orders = int(customer.get("valid_order_count") or 0)
+    cancelled_orders = int(customer.get("cancelled_count") or 0)
+    total_spent = float(customer.get("total_spent") or 0)
+    days = customer.get("days_since_last_order")
+
+    if valid_orders == 0 and cancelled_orders > 0:
+        return "cancelled_only"
+    if valid_orders >= 5 or total_spent >= 500:
+        return "vip"
+    if valid_orders <= 1 and (days is None or days <= 14):
+        return "new"
+    if days is not None and days > 60:
+        return "lost"
+    if days is not None and days > 30:
+        return "at_risk"
+    if days is not None and days <= 14:
+        return "hot"
+    return "active"
+
+
+def _favorite_items(orders_items):
+    counts = {}
+    for order_items in orders_items or []:
+        for item in order_items or []:
+            name = item.get("product_name") or item.get("name")
+            if not name:
+                continue
+            counts[name] = counts.get(name, 0) + int(item.get("quantity") or 1)
+    return [
+        {"name": name, "quantity": qty}
+        for name, qty in sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:3]
+    ]
+
+
+async def _customer_rows(restaurant_id):
     pipeline = [
-        {"$match": {"restaurant_id": rid(user), "status": {"$ne": "cancelled"}}},
+        {"$match": {"restaurant_id": restaurant_id, "customer.phone": {"$nin": [None, ""]}}},
+        {"$sort": {"created_at": 1}},
         {"$group": {
             "_id": "$customer.phone",
             "name": {"$last": "$customer.name"},
             "phone": {"$last": "$customer.phone"},
             "order_count": {"$sum": 1},
-            "total_spent": {"$sum": "$total"},
-            "avg_ticket": {"$avg": "$total"},
-            "last_order": {"$max": "$created_at"},
-            "first_order": {"$min": "$created_at"},
+            "valid_order_count": {"$sum": {"$cond": [{"$ne": ["$status", "cancelled"]}, 1, 0]}},
+            "completed_count": {"$sum": {"$cond": [{"$eq": ["$status", "completed"]}, 1, 0]}},
+            "cancelled_count": {"$sum": {"$cond": [{"$eq": ["$status", "cancelled"]}, 1, 0]}},
+            "total_spent": {"$sum": {"$cond": [{"$ne": ["$status", "cancelled"]}, "$total", 0]}},
+            "last_order_at": {"$max": "$created_at"},
+            "first_order_at": {"$min": "$created_at"},
+            "last_status": {"$last": "$status"},
+            "neighborhoods": {"$addToSet": "$address.neighborhood"},
+            "payment_methods": {"$addToSet": "$payment_method"},
+            "sources": {"$addToSet": "$source"},
+            "items_history": {"$push": "$items"},
         }},
-        {"$sort": {"total_spent": -1}},
+        {"$sort": {"total_spent": -1, "last_order_at": -1}},
     ]
-    all_customers = await db.orders.aggregate(pipeline).to_list(5000)
-    # Enrich with loyalty points
-    for c in all_customers:
-        acc = await db.loyalty_accounts.find_one(
-            {"restaurant_id": rid(user), "phone": c["phone"]}, {"_id": 0}
-        )
-        c["loyalty_points"] = acc.get("points", 0) if acc else 0
-    # Filter
+    customers = await db.orders.aggregate(pipeline).to_list(10000)
+    phones = [c.get("phone") for c in customers if c.get("phone")]
+
+    lead_profiles = {}
+    if phones:
+        profiles = await db.customer_leads.find(
+            {"restaurant_id": restaurant_id, "phone": {"$in": phones}}, {"_id": 0}
+        ).to_list(10000)
+        lead_profiles = {p.get("phone"): p for p in profiles}
+
+    loyalty_accounts = {}
+    if phones:
+        accounts = await db.loyalty_accounts.find(
+            {"restaurant_id": restaurant_id, "phone": {"$in": phones}}, {"_id": 0}
+        ).to_list(10000)
+        loyalty_accounts = {a.get("phone"): a for a in accounts}
+
+    for c in customers:
+        total_spent = float(c.get("total_spent") or 0)
+        valid_orders = int(c.get("valid_order_count") or 0)
+        c["avg_ticket"] = total_spent / valid_orders if valid_orders else 0
+        c["days_since_last_order"] = _days_since(c.get("last_order_at"))
+        c["segment"] = _lead_segment(c)
+        c["segment_label"] = LEAD_SEGMENTS[c["segment"]]["label"]
+        c["lead_score"] = min(100, int((valid_orders * 12) + (total_spent / 12)))
+        c["favorite_items"] = _favorite_items(c.pop("items_history", []))
+        c["neighborhood"] = next((n for n in c.get("neighborhoods") or [] if n), "")
+        c["payment_method"] = next((p for p in c.get("payment_methods") or [] if p), "")
+
+        profile = lead_profiles.get(c.get("phone")) or {}
+        c["lead_status"] = profile.get("lead_status") or "none"
+        c["lead_status_label"] = LEAD_STATUS_LABELS.get(c["lead_status"], c["lead_status"])
+        c["lead_notes"] = profile.get("notes") or ""
+        c["next_action_at"] = profile.get("next_action_at") or ""
+        c["tags"] = profile.get("tags") or []
+        c["loyalty_points"] = (loyalty_accounts.get(c.get("phone")) or {}).get("points", 0)
+
+    return customers
+
+
+def _filter_customers(customers, search="", segment="", lead_status=""):
+    rows = customers
     if search:
         s = search.lower()
-        all_customers = [c for c in all_customers if s in (c.get("name") or "").lower() or s in (c.get("phone") or "")]
+        rows = [
+            c for c in rows
+            if s in (c.get("name") or "").lower()
+            or s in (c.get("phone") or "")
+            or s in (c.get("neighborhood") or "").lower()
+        ]
+    if segment and segment != "all":
+        rows = [c for c in rows if c.get("segment") == segment]
+    if lead_status and lead_status != "all":
+        rows = [c for c in rows if c.get("lead_status") == lead_status]
+    return rows
+
+
+def _customers_summary(customers):
+    return {
+        "total": len(customers),
+        "vip": sum(1 for c in customers if c.get("segment") == "vip"),
+        "hot": sum(1 for c in customers if c.get("segment") == "hot"),
+        "at_risk": sum(1 for c in customers if c.get("segment") == "at_risk"),
+        "lost": sum(1 for c in customers if c.get("segment") == "lost"),
+        "to_contact": sum(1 for c in customers if c.get("lead_status") == "to_contact"),
+        "revenue": sum(float(c.get("total_spent") or 0) for c in customers),
+    }
+
+
+@router.get("/customers")
+async def list_customers(
+    user=Depends(require_restaurant),
+    search: str = Query(""),
+    segment: str = Query(""),
+    lead_status: str = Query(""),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(30, le=100),
+):
+    all_customers = await _customer_rows(rid(user))
+    summary = _customers_summary(all_customers)
+    all_customers = _filter_customers(all_customers, search, segment, lead_status)
     total = len(all_customers)
     skip = (page - 1) * per_page
     return {
         "total": total,
         "pages": math.ceil(total / per_page),
         "page": page,
+        "summary": summary,
+        "segments": [{"key": k, **v} for k, v in LEAD_SEGMENTS.items()],
+        "lead_statuses": [{"key": k, "label": v} for k, v in LEAD_STATUS_LABELS.items()],
         "customers": all_customers[skip:skip + per_page],
     }
+
+
+@router.get("/customers/export")
+async def export_customers(
+    user=Depends(require_restaurant),
+    search: str = Query(""),
+    segment: str = Query(""),
+    lead_status: str = Query(""),
+):
+    rows = _filter_customers(await _customer_rows(rid(user)), search, segment, lead_status)
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=";")
+    writer.writerow([
+        "Nome", "Telefone", "Segmento", "Status lead", "Pedidos", "Pedidos validos",
+        "Cancelados", "Total gasto", "Ticket medio", "Ultimo pedido", "Dias sem comprar",
+        "Bairro", "Forma pagamento", "Itens favoritos", "Observacoes",
+    ])
+    for c in rows:
+        writer.writerow([
+            c.get("name") or "",
+            c.get("phone") or "",
+            c.get("segment_label") or "",
+            c.get("lead_status_label") or "",
+            c.get("order_count") or 0,
+            c.get("valid_order_count") or 0,
+            c.get("cancelled_count") or 0,
+            f"{float(c.get('total_spent') or 0):.2f}".replace(".", ","),
+            f"{float(c.get('avg_ticket') or 0):.2f}".replace(".", ","),
+            c.get("last_order_at") or "",
+            c.get("days_since_last_order") if c.get("days_since_last_order") is not None else "",
+            c.get("neighborhood") or "",
+            c.get("payment_method") or "",
+            ", ".join(item.get("name") or "" for item in c.get("favorite_items") or []),
+            c.get("lead_notes") or "",
+        ])
+    return PlainTextResponse(
+        output.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="clientes-leads.csv"'},
+    )
 
 
 @router.get("/customers/{phone}/orders")
@@ -373,6 +562,26 @@ async def customer_orders(phone: str, user=Depends(require_restaurant)):
         {"restaurant_id": rid(user), "customer.phone": phone}, {"_id": 0}
     ).sort("created_at", -1).to_list(100)
     return orders
+
+
+@router.put("/customers/{phone}/lead")
+async def update_customer_lead(phone: str, body: dict, user=Depends(require_restaurant)):
+    status = body.get("lead_status") or "none"
+    if status not in LEAD_STATUS_LABELS:
+        raise HTTPException(400, "Status de lead invalido")
+    patch = {
+        "lead_status": status,
+        "notes": str(body.get("notes") or "")[:2000],
+        "next_action_at": str(body.get("next_action_at") or "")[:30],
+        "tags": [str(tag)[:40] for tag in (body.get("tags") or []) if str(tag).strip()][:10],
+        "updated_at": now_iso(),
+    }
+    await db.customer_leads.update_one(
+        {"restaurant_id": rid(user), "phone": phone},
+        {"$set": patch, "$setOnInsert": {"restaurant_id": rid(user), "phone": phone, "created_at": now_iso()}},
+        upsert=True,
+    )
+    return {"ok": True, "phone": phone, **patch, "lead_status_label": LEAD_STATUS_LABELS[status]}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
