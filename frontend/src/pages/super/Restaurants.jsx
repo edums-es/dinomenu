@@ -62,15 +62,19 @@ function CreateModal({ onClose, onCreated }) {
   );
 }
 
-function DetailModal({ restaurant, onClose, onUpdate }) {
+function DetailModal({ restaurant: initialRestaurant, onClose, onUpdate }) {
+  const [detail, setDetail] = useState(initialRestaurant);
+  const restaurant = detail;
   const [chart, setChart] = useState([]);
   const [orders, setOrders] = useState([]);
   const [tab, setTab] = useState("overview");
 
   useEffect(() => {
-    api.get(`/super/restaurants/${restaurant.id}/revenue-chart`).then((r) => setChart(r.data));
-    api.get(`/super/restaurants/${restaurant.id}/orders`).then((r) => setOrders(r.data));
-  }, [restaurant.id]);
+    setDetail(initialRestaurant);
+    api.get(`/super/restaurants/${initialRestaurant.id}`).then((r) => setDetail(r.data)).catch(() => {});
+    api.get(`/super/restaurants/${initialRestaurant.id}/revenue-chart`).then((r) => setChart(r.data));
+    api.get(`/super/restaurants/${initialRestaurant.id}/orders`).then((r) => setOrders(r.data));
+  }, [initialRestaurant.id]);
 
   const toggle = async () => {
     try {
@@ -94,7 +98,7 @@ function DetailModal({ restaurant, onClose, onUpdate }) {
       <DialogContent className="max-w-2xl dark:bg-[#161B22] dark:border-gray-700 max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="dark:text-white flex items-center gap-2">
-            <Store className="w-5 h-5 text-indigo-500" /> {restaurant.name}
+            <Store className="w-5 h-5 text-indigo-500" /> {detail.name}
           </DialogTitle>
         </DialogHeader>
 
@@ -112,7 +116,7 @@ function DetailModal({ restaurant, onClose, onUpdate }) {
           <div className="space-y-4">
             {/* Stats */}
             <div className="grid grid-cols-3 gap-3">
-              {[["Pedidos", restaurant.order_count],[  "Produtos", restaurant.product_count],["Receita", brl(restaurant.revenue || 0)]].map(([l,v]) => (
+              {[["Pedidos", detail.order_count],[  "Produtos", detail.product_count],["Receita", brl(detail.revenue || 0)]].map(([l,v]) => (
                 <div key={l} className="bg-gray-50 dark:bg-gray-800 rounded-xl p-3 text-center">
                   <p className="font-display font-bold text-lg dark:text-white">{v}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">{l}</p>
@@ -147,14 +151,14 @@ function DetailModal({ restaurant, onClose, onUpdate }) {
 
             {/* Actions */}
             <div className="flex gap-2 pt-2">
-              <a href={`/loja/${restaurant.slug}`} target="_blank" rel="noreferrer" className="flex-1">
+              <a href={`/loja/${detail.slug}`} target="_blank" rel="noreferrer" className="flex-1">
                 <Button variant="outline" className="w-full dark:border-gray-700 dark:text-gray-300">
                   <ExternalLink className="w-4 h-4 mr-1" /> Ver cardápio
                 </Button>
               </a>
               <Button onClick={toggle} variant="outline"
-                className={`flex-1 ${restaurant.status === "active" ? "border-red-200 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400" : "border-green-200 text-green-600 hover:bg-green-50 dark:border-green-800 dark:text-green-400"}`}>
-                {restaurant.status === "active" ? <><XCircle className="w-4 h-4 mr-1" /> Suspender</> : <><CheckCircle2 className="w-4 h-4 mr-1" /> Ativar</>}
+                className={`flex-1 ${detail.status === "active" ? "border-red-200 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400" : "border-green-200 text-green-600 hover:bg-green-50 dark:border-green-800 dark:text-green-400"}`}>
+                {detail.status === "active" ? <><XCircle className="w-4 h-4 mr-1" /> Suspender</> : <><CheckCircle2 className="w-4 h-4 mr-1" /> Ativar</>}
               </Button>
               <Button onClick={del} variant="outline" className="border-red-200 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400">
                 <Trash2 className="w-4 h-4" />

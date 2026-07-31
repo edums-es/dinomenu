@@ -15,6 +15,47 @@ def _now(): return datetime.now(timezone.utc)
 def _iso(dt): return dt.isoformat()
 
 
+async def _subscription_invoice_fallbacks(restaurant_id: str = ""):
+    q = {"status": {"$in": ["active", "trial"]}}
+    if restaurant_id:
+        q["restaurant_id"] = restaurant_id
+    subs = await db.subscriptions.find(q, {"_id": 0}).to_list(10000)
+    if not subs:
+        return []
+
+    sub_ids = [s.get("id") for s in subs if s.get("id")]
+    invoices = await db.invoices.find(
+        {"subscription_id": {"$in": sub_ids}},
+        {"subscription_id": 1, "_id": 0},
+    ).to_list(len(sub_ids))
+    invoiced_ids = {i.get("subscription_id") for i in invoices}
+
+    fallbacks = []
+    for sub in subs:
+        amount = float(sub.get("amount") or 0)
+        if not sub.get("id") or sub.get("id") in invoiced_ids or amount <= 0:
+            continue
+        r = await db.restaurants.find_one({"id": sub.get("restaurant_id")}, {"name": 1, "_id": 0})
+        paid_at = sub.get("started_at") or sub.get("created_at") or now_iso()
+        fallbacks.append({
+            "id": f"activation-{sub['id']}",
+            "subscription_id": sub["id"],
+            "restaurant_id": sub.get("restaurant_id"),
+            "restaurant_name": r["name"] if r else sub.get("restaurant_id", "--"),
+            "restaurant": {"name": r["name"]} if r else None,
+            "plan_id": sub.get("plan_id"),
+            "amount": amount,
+            "payment_method": sub.get("payment_method") or "manual",
+            "status": "paid",
+            "paid_at": paid_at,
+            "created_at": paid_at,
+            "period_start": paid_at,
+            "period_end": sub.get("expires_at"),
+            "source": "activation",
+        })
+    return fallbacks
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # PLANS
 # ═══════════════════════════════════════════════════════════════════════════
@@ -54,7 +95,17 @@ async def list_plans(user=Depends(SUPER)):
     plans = await db.plans.find({}, {"_id": 0}).sort("price_monthly", 1).to_list(50)
     for p in plans:
         p.update(normalize_plan_payload(p))
-        p["subscriber_count"] = await db.subscriptions.count_documents({"plan_id": p["id"], "status": "active"})
+        sub_rows = await db.subscriptions.find(
+            {"plan_id": p["id"], "status": "active"},
+            {"restaurant_id": 1, "_id": 0},
+        ).to_list(10000)
+        restaurant_rows = await db.restaurants.find(
+            {"plan": p.get("slug"), "status": "active"},
+            {"id": 1, "_id": 0},
+        ).to_list(10000)
+        subscriber_ids = {s.get("restaurant_id") for s in sub_rows if s.get("restaurant_id")}
+        subscriber_ids.update(r.get("id") for r in restaurant_rows if r.get("id"))
+        p["subscriber_count"] = len(subscriber_ids)
         p["subscribers_count"] = p["subscriber_count"]
     return plans
 
@@ -87,7 +138,19 @@ async def update_plan(pid: str, data: PlanIn, user=Depends(SUPER)):
 
 @router.delete("/plans/{pid}")
 async def delete_plan(pid: str, user=Depends(SUPER)):
-    active = await db.subscriptions.count_documents({"plan_id": pid, "status": "active"})
+    plan = await db.plans.find_one({"id": pid})
+    sub_rows = await db.subscriptions.find(
+        {"plan_id": pid, "status": "active"},
+        {"restaurant_id": 1, "_id": 0},
+    ).to_list(10000)
+    active_ids = {s.get("restaurant_id") for s in sub_rows if s.get("restaurant_id")}
+    if plan:
+        restaurant_rows = await db.restaurants.find(
+            {"plan": plan.get("slug"), "status": "active"},
+            {"id": 1, "_id": 0},
+        ).to_list(10000)
+        active_ids.update(r.get("id") for r in restaurant_rows if r.get("id"))
+    active = len(active_ids)
     if active > 0: raise HTTPException(400, f"Plano tem {active} assinantes ativos. Migre-os antes.")
     await db.plans.delete_one({"id": pid})
     return {"ok": True}
@@ -200,6 +263,7 @@ async def list_subscriptions(
 ):
     q: dict = {}
     if status: q["status"] = status
+    else: q["status"] = {"$ne": "cancelled"}
     if plan_id: q["plan_id"] = plan_id
     subs = await db.subscriptions.find(q, {"_id": 0}).sort("created_at", -1).to_list(1000)
     # Enrich
@@ -276,6 +340,14 @@ async def create_subscription(data: SubscriptionIn, user=Depends(SUPER)):
         "created_at": now_iso(),
     }
     await db.subscriptions.insert_one(doc)
+    if amount and amount > 0:
+        await db.invoices.insert_one({
+            "id": new_id(), "subscription_id": doc["id"],
+            "restaurant_id": data.restaurant_id, "plan_id": data.plan_id,
+            "amount": amount, "payment_method": data.payment_method or "manual",
+            "status": "paid", "paid_at": now_iso(), "created_at": now_iso(),
+            "period_start": doc["started_at"], "period_end": expires_at,
+        })
     # Update restaurant plan
     await db.restaurants.update_one({"id": data.restaurant_id}, {"$set": {"plan": plan["slug"], "billing_cycle": billing_cycle, "status": "active"}})
     return clean(doc)
@@ -356,7 +428,11 @@ async def delete_subscription(sid: str, user=Depends(SUPER)):
     sub = await db.subscriptions.find_one({"id": sid})
     if not sub:
         raise HTTPException(404, "Assinatura nao encontrada")
-    await db.subscriptions.delete_one({"id": sid})
+    await db.subscriptions.update_one({"id": sid}, {"$set": {
+        "status": "cancelled",
+        "cancelled_at": now_iso(),
+        "updated_at": now_iso(),
+    }})
     return {"ok": True}
 
 @router.put("/subscriptions/{sid}/status")
@@ -433,16 +509,30 @@ async def list_invoices(user=Depends(SUPER), restaurant_id: str = Query("")):
     for inv in invoices:
         r = await db.restaurants.find_one({"id": inv.get("restaurant_id")}, {"name": 1, "_id": 0})
         inv["restaurant_name"] = r["name"] if r else "—"
-    return invoices
+    for inv in invoices:
+        inv["restaurant"] = {"name": inv.get("restaurant_name") or inv.get("restaurant_id") or "--"}
+    invoices.extend(await _subscription_invoice_fallbacks(restaurant_id))
+    return sorted(invoices, key=lambda i: i.get("paid_at") or i.get("created_at") or "", reverse=True)
 
 @router.get("/billing/summary")
 async def billing_summary(user=Depends(SUPER)):
     invoices = await db.invoices.find({"status": "paid"}, {"amount": 1, "paid_at": 1, "_id": 0}).to_list(50000)
+    invoices.extend(await _subscription_invoice_fallbacks())
     total_revenue = round(sum(i["amount"] for i in invoices), 2)
     now = _now()
     this_month = f"{now.year}-{now.month:02d}"
     monthly = round(sum(i["amount"] for i in invoices if (i.get("paid_at") or "")[:7] == this_month), 2)
-    active_subs = await db.subscriptions.count_documents({"status": "active"})
+    active_sub_rows = await db.subscriptions.find(
+        {"status": "active"},
+        {"restaurant_id": 1, "_id": 0},
+    ).to_list(10000)
+    active_restaurant_rows = await db.restaurants.find(
+        {"status": "active"},
+        {"id": 1, "plan": 1, "_id": 0},
+    ).to_list(10000)
+    active_subscriber_ids = {s.get("restaurant_id") for s in active_sub_rows if s.get("restaurant_id")}
+    active_subscriber_ids.update(r.get("id") for r in active_restaurant_rows if r.get("id") and r.get("plan"))
+    active_subs = len(active_subscriber_ids)
     trial_subs = await db.subscriptions.count_documents({"status": "trial"})
     overdue_subs = await db.subscriptions.count_documents({"status": "overdue"})
     mrr = 0
@@ -451,7 +541,8 @@ async def billing_summary(user=Depends(SUPER)):
     return {
         "total_revenue": total_revenue, "monthly_revenue": monthly,
         "mrr": mrr, "arr": round(mrr * 12, 2),
-        "active_subscriptions": active_subs, "trial": trial_subs, "overdue": overdue_subs,
+        "active_subscriptions": active_subs, "active_subscribers": active_subs,
+        "trial": trial_subs, "overdue": overdue_subs,
     }
 
 

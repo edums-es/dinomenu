@@ -76,6 +76,11 @@ async def list_restaurants(user=Depends(SUPER)):
     for r in restaurants:
         r["order_count"] = await db.orders.count_documents({"restaurant_id": r["id"]})
         r["product_count"] = await db.products.count_documents({"restaurant_id": r["id"]})
+        orders = await db.orders.find(
+            {"restaurant_id": r["id"], "status": {"$ne": "cancelled"}},
+            {"total": 1, "_id": 0},
+        ).to_list(10000)
+        r["revenue"] = round(sum(o.get("total", 0) for o in orders), 2)
     return restaurants
 
 
