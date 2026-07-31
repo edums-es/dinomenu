@@ -1,11 +1,12 @@
 """Business management: Plans, Subscriptions, Billing, Affiliates, Resellers."""
 from datetime import datetime, timezone, timedelta
-from typing import List, Optional, Literal
+from typing import Dict, List, Optional, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from db import db
 from auth import require_roles
 from models import clean, new_id, now_iso
+from plan_entitlements import FEATURE_CATALOG, normalize_plan_payload
 
 router = APIRouter(prefix="/api/super", tags=["billing"])
 SUPER = require_roles("super_admin")
@@ -24,35 +25,64 @@ class PlanIn(BaseModel):
     description: Optional[str] = ""
     price_monthly: float = 0.0
     price_yearly: Optional[float] = None
+    price_lifetime: Optional[float] = None
     color: str = "#6366f1"
     is_active: bool = True
     is_featured: bool = False
+    plan_type: Literal["subscription", "legacy_lifetime"] = "subscription"
+    updates_policy: Literal["included", "paid_upgrades"] = "included"
+    billing_options: Dict[str, bool] = {"monthly": True, "yearly": True, "lifetime": False}
+    feature_flags: Dict[str, bool] = {}
+    upgrade_note: Optional[str] = ""
     trial_days: int = 0
     features: List[str] = []
     limits: dict = {}   # e.g. {"max_products": 50, "max_orders_monthly": 500}
+
+
+class FeatureUpdateIn(BaseModel):
+    title: str
+    version: Optional[str] = ""
+    description: Optional[str] = ""
+    price: float = 0.0
+    features: List[str] = []
+    purchase_url: Optional[str] = ""
+    is_active: bool = True
 
 @router.get("/plans")
 async def list_plans(user=Depends(SUPER)):
     plans = await db.plans.find({}, {"_id": 0}).sort("price_monthly", 1).to_list(50)
     for p in plans:
+        p.update(normalize_plan_payload(p))
         p["subscriber_count"] = await db.subscriptions.count_documents({"plan_id": p["id"], "status": "active"})
+        p["subscribers_count"] = p["subscriber_count"]
     return plans
+
+
+@router.get("/plans/catalog")
+async def plan_catalog(user=Depends(SUPER)):
+    return {
+        "features": FEATURE_CATALOG,
+        "billing_options": ["monthly", "yearly", "lifetime"],
+        "plan_types": ["subscription", "legacy_lifetime"],
+        "updates_policies": ["included", "paid_upgrades"],
+    }
 
 @router.post("/plans")
 async def create_plan(data: PlanIn, user=Depends(SUPER)):
     if await db.plans.find_one({"slug": data.slug}):
         raise HTTPException(400, "Slug já existe")
-    doc = data.model_dump()
+    doc = normalize_plan_payload(data.model_dump())
     doc.update({"id": new_id(), "created_at": now_iso()})
     await db.plans.insert_one(doc)
     return clean(doc)
 
 @router.put("/plans/{pid}")
 async def update_plan(pid: str, data: PlanIn, user=Depends(SUPER)):
-    patch = {**data.model_dump(), "updated_at": now_iso()}
+    patch = {**normalize_plan_payload(data.model_dump()), "updated_at": now_iso()}
     res = await db.plans.update_one({"id": pid}, {"$set": patch})
     if res.matched_count == 0: raise HTTPException(404, "Plano não encontrado")
-    return await db.plans.find_one({"id": pid}, {"_id": 0})
+    plan = await db.plans.find_one({"id": pid}, {"_id": 0})
+    return normalize_plan_payload(plan)
 
 @router.delete("/plans/{pid}")
 async def delete_plan(pid: str, user=Depends(SUPER)):
@@ -60,6 +90,73 @@ async def delete_plan(pid: str, user=Depends(SUPER)):
     if active > 0: raise HTTPException(400, f"Plano tem {active} assinantes ativos. Migre-os antes.")
     await db.plans.delete_one({"id": pid})
     return {"ok": True}
+
+
+@router.get("/feature-updates")
+async def list_feature_updates(user=Depends(SUPER)):
+    updates = await db.feature_updates.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    for item in updates:
+        item["buyer_count"] = await db.restaurant_feature_updates.count_documents({
+            "update_id": item["id"],
+            "status": {"$in": ["paid", "granted"]},
+        })
+    return updates
+
+
+@router.post("/feature-updates")
+async def create_feature_update(data: FeatureUpdateIn, user=Depends(SUPER)):
+    doc = data.model_dump()
+    doc.update({"id": new_id(), "created_at": now_iso(), "updated_at": now_iso()})
+    await db.feature_updates.insert_one(doc)
+    return clean(doc)
+
+
+@router.put("/feature-updates/{uid}")
+async def update_feature_update(uid: str, data: FeatureUpdateIn, user=Depends(SUPER)):
+    patch = {**data.model_dump(), "updated_at": now_iso()}
+    res = await db.feature_updates.update_one({"id": uid}, {"$set": patch})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Atualizacao nao encontrada")
+    return await db.feature_updates.find_one({"id": uid}, {"_id": 0})
+
+
+@router.delete("/feature-updates/{uid}")
+async def delete_feature_update(uid: str, user=Depends(SUPER)):
+    sold = await db.restaurant_feature_updates.count_documents({"update_id": uid})
+    if sold:
+        raise HTTPException(400, "Esta atualizacao ja foi liberada para cliente. Desative em vez de excluir.")
+    await db.feature_updates.delete_one({"id": uid})
+    return {"ok": True}
+
+
+@router.post("/feature-updates/{uid}/grant")
+async def grant_feature_update(uid: str, body: dict, user=Depends(SUPER)):
+    restaurant_id = body.get("restaurant_id")
+    if not restaurant_id:
+        raise HTTPException(400, "Informe o restaurante")
+    update = await db.feature_updates.find_one({"id": uid})
+    if not update:
+        raise HTTPException(404, "Atualizacao nao encontrada")
+    restaurant = await db.restaurants.find_one({"id": restaurant_id})
+    if not restaurant:
+        raise HTTPException(404, "Restaurante nao encontrado")
+
+    existing = await db.restaurant_feature_updates.find_one({"restaurant_id": restaurant_id, "update_id": uid})
+    patch = {
+        "restaurant_id": restaurant_id,
+        "update_id": uid,
+        "status": body.get("status") or "granted",
+        "price_paid": float(body.get("price_paid", update.get("price", 0)) or 0),
+        "granted_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    if existing:
+        await db.restaurant_feature_updates.update_one({"id": existing["id"]}, {"$set": patch})
+        return await db.restaurant_feature_updates.find_one({"id": existing["id"]}, {"_id": 0})
+
+    doc = {"id": new_id(), **patch, "created_at": now_iso()}
+    await db.restaurant_feature_updates.insert_one(doc)
+    return clean(doc)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

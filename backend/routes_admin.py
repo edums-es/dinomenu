@@ -15,6 +15,7 @@ from routes_ws import broadcast as ws_broadcast
 from routes_printing import enqueue_order_print
 from flemy import emit_flemy_event
 from order_security import release_stock
+from plan_entitlements import normalize_plan_payload, updates_policy_for
 from models import (
     AddonGroupIn, CategoryIn, ProductIn, CouponIn, BannerIn, RestaurantSettings, StatusUpdate,
     ORDER_STATUSES, clean, new_id, now_iso, is_restaurant_open,
@@ -90,6 +91,49 @@ async def get_restaurant_slug(user=Depends(require_restaurant)):
     if not r:
         raise HTTPException(404, "Restaurante não encontrado")
     return {"slug": r.get("slug", "")}
+
+
+@router.get("/available-updates")
+async def available_updates(user=Depends(require_restaurant)):
+    restaurant_id = rid(user)
+    restaurant = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0})
+    if not restaurant:
+        raise HTTPException(404, "Restaurante nao encontrado")
+
+    subscription = await db.subscriptions.find_one(
+        {"restaurant_id": restaurant_id, "status": {"$in": ["active", "trial"]}},
+        sort=[("created_at", -1)],
+    )
+    plan = None
+    if subscription and subscription.get("plan_id"):
+        plan = await db.plans.find_one({"id": subscription.get("plan_id")}, {"_id": 0})
+    if not plan and restaurant.get("plan"):
+        plan = await db.plans.find_one({"slug": restaurant.get("plan")}, {"_id": 0})
+    plan = normalize_plan_payload(plan)
+
+    policy = updates_policy_for(restaurant, plan, subscription)
+    if policy != "paid_upgrades":
+        return {
+            "updates_policy": policy,
+            "locked_future_updates": False,
+            "plan": {"name": plan.get("name"), "slug": plan.get("slug")},
+            "updates": [],
+        }
+
+    releases = await db.feature_updates.find({"is_active": True}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    owned = await db.restaurant_feature_updates.find(
+        {"restaurant_id": restaurant_id, "status": {"$in": ["paid", "granted"]}},
+        {"update_id": 1, "_id": 0},
+    ).to_list(500)
+    owned_ids = {item.get("update_id") for item in owned}
+    available = [release for release in releases if release.get("id") not in owned_ids]
+
+    return {
+        "updates_policy": policy,
+        "locked_future_updates": True,
+        "plan": {"name": plan.get("name"), "slug": plan.get("slug")},
+        "updates": available,
+    }
 
 
 # ---------- categories ----------
