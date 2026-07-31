@@ -90,7 +90,49 @@ async def calculate_order(db, restaurant: dict, requested_items, coupon_code=Non
             "is_available": True,
         })
         if not product:
-            raise HTTPException(status_code=400, detail="Produto indisponivel ou invalido")
+            combos_collection = getattr(db, "combos", None)
+            combo = await combos_collection.find_one({
+                "id": requested.product_id,
+                "restaurant_id": restaurant_id,
+                "is_active": True,
+            }) if combos_collection else None
+            if not combo:
+                raise HTTPException(status_code=400, detail="Produto indisponivel ou invalido")
+
+            base_price = money(combo.get("price"))
+            item_total = money(base_price * quantity)
+            subtotal = money(subtotal + item_total)
+            item_count += quantity
+
+            combo_options = []
+            for combo_item in combo.get("items") or []:
+                component_quantity = int(combo_item.get("quantity") or 1) * quantity
+                combo_options.append({
+                    "group": "Combo",
+                    "name": f"{combo_item.get('quantity') or 1}x {combo_item.get('product_name') or 'Item'}",
+                    "price": 0.0,
+                })
+                component = await db.products.find_one({
+                    "id": combo_item.get("product_id"),
+                    "restaurant_id": restaurant_id,
+                    "is_available": True,
+                })
+                if component and component.get("track_stock"):
+                    if int(component.get("stock_quantity") or 0) < component_quantity:
+                        raise HTTPException(status_code=409, detail=f"Estoque insuficiente para {component['name']}")
+                    reservations.append({"product_id": component["id"], "quantity": component_quantity})
+
+            canonical_items.append({
+                "product_id": combo["id"],
+                "product_name": combo["name"],
+                "quantity": quantity,
+                "unit_price": base_price,
+                "options": combo_options,
+                "notes": (requested.notes or "")[:500],
+                "total_price": item_total,
+                "item_type": "combo",
+            })
+            continue
 
         if product.get("track_stock") and int(product.get("stock_quantity") or 0) < quantity:
             raise HTTPException(status_code=409, detail=f"Estoque insuficiente para {product['name']}")

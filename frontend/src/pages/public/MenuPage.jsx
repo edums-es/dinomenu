@@ -217,6 +217,23 @@ function MenuContent({ data, slug }) {
 
   const scrollToCat = (cid) => { setActiveCat(cid); sectionRefs.current[cid]?.scrollIntoView({ behavior:"smooth", block:"start" }); };
 
+  const addComboToCart = (combo) => {
+    const price = Number(combo.price) || 0;
+    const product = {
+      id: combo.id,
+      name: combo.name,
+      price,
+      promotional_price: null,
+      image_url: combo.image_url,
+      description: combo.description || "",
+      is_available: true,
+      option_groups: [],
+      is_combo: true,
+    };
+    addItem({ product, quantity: 1, selectedOptions: [], notes: "", unitPrice: price });
+    toast.success(`${combo.name} adicionado!`);
+  };
+
   const copyShareLink = async (url) => {
     try {
       await navigator.clipboard.writeText(url);
@@ -381,7 +398,7 @@ function MenuContent({ data, slug }) {
                       <p className="font-display font-bold text-sm" style={textStyle}>{combo.name}</p>
                       <div className="flex items-center justify-between mt-2">
                         <span className="font-display font-bold text-sm" style={{color:accent}}>{brl(combo.price)}</span>
-                        <button onClick={() => addItem({id:combo.id,name:combo.name,price:combo.price,image_url:combo.image_url,description:combo.description,is_available:true,option_groups:[]},1,[])}
+                        <button onClick={() => addComboToCart(combo)}
                           className="w-8 h-8 rounded-full grid place-items-center" style={{background:accent,color:buttonTextColor}}>
                           <Plus className="w-4 h-4"/>
                         </button>

@@ -182,6 +182,34 @@ def test_calculator_does_not_accept_product_from_another_restaurant():
     assert error.value.status_code == 400
 
 
+def test_calculator_accepts_active_combo_and_uses_server_price():
+    component = sample_product(id="product-a", track_stock=True, stock_quantity=10, option_groups=[])
+    combo = {
+        "id": "combo-a",
+        "restaurant_id": "restaurant-a",
+        "name": "Combo oficial",
+        "price": 35.0,
+        "is_active": True,
+        "items": [{"product_id": "product-a", "product_name": "Produto oficial", "quantity": 2}],
+    }
+    db = SimpleNamespace(
+        products=FakeCollection([component]),
+        combos=FakeCollection([combo]),
+        addon_groups=FakeCollection([]),
+        coupons=FakeCollection([]),
+    )
+    item = requested_item(product_id="combo-a", quantity=2)
+    item.options = []
+
+    result = asyncio.run(calculate_order(db, {"id": "restaurant-a"}, [item]))
+
+    assert result["items"][0]["product_name"] == "Combo oficial"
+    assert result["items"][0]["unit_price"] == 35.0
+    assert result["items"][0]["total_price"] == 70.0
+    assert result["items"][0]["item_type"] == "combo"
+    assert result["reservations"] == [{"product_id": "product-a", "quantity": 4}]
+
+
 def test_stock_reservation_is_atomic_and_rejects_insufficient_stock():
     product = sample_product(stock_quantity=1)
     db = SimpleNamespace(products=FakeCollection([product]))

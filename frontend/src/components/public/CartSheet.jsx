@@ -62,7 +62,7 @@ const localDeliveryQuote = (restaurant, address) => {
   return match ? { delivery_fee: Number(match.fee) || 0, zone: match } : { delivery_fee: flat, zone: null };
 };
 export default function CartSheet({ open, onOpenChange, restaurant, slug, products = [] }) {
-  const { items, addItem, updateQuantity, removeItem, subtotal, clearCart } = useCart();
+  const { items: rawItems, addItem, updateQuantity, removeItem, clearCart } = useCart();
   const tableNumber = useMemo(() => {
     if (typeof window === "undefined") return null;
     const value = new URLSearchParams(window.location.search).get("mesa");
@@ -98,6 +98,14 @@ export default function CartSheet({ open, onOpenChange, restaurant, slug, produc
   const [orderNotes, setOrderNotes] = useState("");
   const [deliveryQuote, setDeliveryQuote] = useState(() => localDeliveryQuote(restaurant, {}));
 
+  const items = useMemo(
+    () => (rawItems || []).filter((item) => item?.product?.id && Number(item.quantity) > 0),
+    [rawItems],
+  );
+  const subtotal = useMemo(
+    () => items.reduce((sum, item) => sum + (Number(item.unitPrice) || 0) * (Number(item.quantity) || 0), 0),
+    [items],
+  );
   const deliveryFee = type !== "delivery" || coupon?.free_delivery ? 0 : Number(deliveryQuote?.delivery_fee) || 0;
 
   const itemCount = items.reduce((totalItems, item) => totalItems + item.quantity, 0);
