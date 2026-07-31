@@ -6,6 +6,7 @@ import { ThemeProvider, ForceLightMode } from "@/context/ThemeContext";
 import { BrandProvider } from "@/context/BrandContext";
 
 const LoginPage = lazy(() => import("@/pages/LoginPage"));
+const Landing = lazy(() => import("@/pages/Landing"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 const MenuPage = lazy(() => import("@/pages/public/MenuPage"));
 const TrackOrder = lazy(() => import("@/pages/public/TrackOrder"));
@@ -67,6 +68,7 @@ function App() {
           <BrowserRouter>
             <Suspense fallback={<RouteLoader />}>
             <Routes>
+            <Route path="/" element={<ForceLightMode><Landing /></ForceLightMode>} />
             <Route path="/themazuki/master" element={<ForceLightMode><LoginPage /></ForceLightMode>} />
             <Route path="/loja/:slug" element={<ForceLightMode><MenuPage /></ForceLightMode>} />
             <Route path="/cardapio/:slug" element={<ForceLightMode><MenuPage /></ForceLightMode>} />
