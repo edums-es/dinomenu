@@ -8,22 +8,24 @@ import { useEffect, useRef, useCallback } from "react";
 const WS_BASE = (process.env.REACT_APP_BACKEND_URL || "http://localhost:8001")
   .replace(/^http/, "ws")
   .replace(/\/$/, "");
+const MAX_RETRIES = 2;
 
 export function useOrdersWS({ restaurantId, token, onNewOrder, onOrderUpdated }) {
   const wsRef = useRef(null);
   const reconnectTimer = useRef(null);
   const mountedRef = useRef(true);
+  const retriesRef = useRef(0);
 
   const connect = useCallback(() => {
     if (!restaurantId || !token || !mountedRef.current) return;
+    if (sessionStorage.getItem("eg_ws_disabled") === "1") return;
 
     const url = `${WS_BASE}/api/ws/orders/${restaurantId}?token=${encodeURIComponent(token)}`;
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log("[WS] Conectado ao canal de pedidos");
-      // Cancela qualquer retry pendente
+      retriesRef.current = 0;
       if (reconnectTimer.current) {
         clearTimeout(reconnectTimer.current);
         reconnectTimer.current = null;
@@ -41,8 +43,12 @@ export function useOrdersWS({ restaurantId, token, onNewOrder, onOrderUpdated })
 
     ws.onclose = (e) => {
       if (!mountedRef.current) return;
-      console.log("[WS] Desconectado, reconectando em 3s...");
-      reconnectTimer.current = setTimeout(connect, 3000);
+      retriesRef.current += 1;
+      if (retriesRef.current > MAX_RETRIES) {
+        sessionStorage.setItem("eg_ws_disabled", "1");
+        return;
+      }
+      reconnectTimer.current = setTimeout(connect, 5000 * retriesRef.current);
     };
 
     ws.onerror = () => {

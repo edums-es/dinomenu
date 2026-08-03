@@ -1,6 +1,6 @@
 {
-  "name": "Dino Menu",
-  "short_name": "Dino Menu",
+  "name": "EG Delivery",
+  "short_name": "EG Delivery",
   "description": "Sistema de gestao de delivery",
   "start_url": "/",
   "display": "standalone",
@@ -9,7 +9,7 @@
   "orientation": "portrait-primary",
   "icons": [
     { "src": "/favicon.ico", "sizes": "64x64", "type": "image/x-icon" },
-    { "src": "/logo192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/logo512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "/logoeg.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/logoeg.png", "sizes": "512x512", "type": "image/png" }
   ]
 }

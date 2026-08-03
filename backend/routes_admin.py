@@ -1038,12 +1038,21 @@ def _today_start_iso():
     return now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
 
 
+def _local_now():
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo("America/Sao_Paulo"))
+    except Exception:
+        return datetime.now()
+
+
 @router.get("/dashboard")
 async def dashboard(user=Depends(require_restaurant)):
     r = await db.restaurants.find_one({"id": rid(user)})
     orders = await db.orders.find({"restaurant_id": rid(user)}, {"_id": 0}).to_list(5000)
     today = _today_start_iso()[:10]
     today_orders = [o for o in orders if (o.get("created_at") or "")[:10] == today and o.get("status") != "cancelled"]
+    cancelled_today = [o for o in orders if (o.get("created_at") or "")[:10] == today and o.get("status") == "cancelled"]
     revenue = sum(o["total"] for o in today_orders)
     in_progress = [o for o in orders if o.get("status") in ("pending", "accepted", "preparing", "ready", "out_for_delivery")]
 
@@ -1061,11 +1070,38 @@ async def dashboard(user=Depends(require_restaurant)):
         "revenue_today": round(revenue, 2),
         "avg_ticket": round(revenue / len(today_orders), 2) if today_orders else 0,
         "in_progress": len(in_progress),
+        "cancelled_today": len(cancelled_today),
         "is_open": is_restaurant_open(r) if r else False,
         "is_open_manual": r.get("is_open_manual", True) if r else True,
         "top_products": [{"name": n, "qty": q} for n, q in top],
         "recent_orders": sorted(orders, key=lambda o: o.get("created_at", ""), reverse=True)[:8],
     }
+
+
+@router.get("/reports/daily")
+async def reports_daily(days: int = 14, user=Depends(require_restaurant)):
+    days = min(max(days or 14, 1), 90)
+    now = _local_now()
+    start_day = (now - timedelta(days=days - 1)).date()
+    start = datetime.combine(start_day, datetime.min.time()).isoformat()
+    orders = await db.orders.find(
+        {"restaurant_id": rid(user), "created_at": {"$gte": start}},
+        {"_id": 0},
+    ).to_list(5000)
+
+    rows = {}
+    for offset in range(days):
+        day = (start_day + timedelta(days=offset)).isoformat()
+        rows[day] = {"date": day, "orders": 0, "revenue": 0.0}
+
+    for order in orders:
+        day = (order.get("created_at") or "")[:10]
+        if day not in rows or order.get("status") == "cancelled":
+            continue
+        rows[day]["orders"] += 1
+        rows[day]["revenue"] = round(rows[day]["revenue"] + float(order.get("total") or 0), 2)
+
+    return list(rows.values())
 
 
 @router.get("/reports")
