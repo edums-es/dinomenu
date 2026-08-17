@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from auth import require_restaurant
 from db import db
 from models import now_iso
+from operational_alerts import resolve_operational_alert, upsert_operational_alert
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/admin/whatsapp", tags=["whatsapp"])
@@ -148,36 +149,75 @@ async def wa_save_token(body: KiraTokenIn, user=Depends(require_restaurant)):
 @router.get("/status")
 async def wa_status(user=Depends(require_restaurant)):
     provider = await _get_provider()
+    restaurant_id = rid(user)
     try:
         if provider == "kirago":
-            token = await _get_kira_token(rid(user))
+            token = await _get_kira_token(restaurant_id)
             if not token:
+                await upsert_operational_alert(
+                    restaurant_id,
+                    "whatsapp_disconnected",
+                    "WhatsApp precisa de atencao",
+                    "O token do WhatsApp ainda nao foi configurado. As mensagens automaticas para clientes podem nao ser enviadas.",
+                    severity="warning",
+                    category="whatsapp",
+                    action_label="Configurar WhatsApp",
+                    action_url="/supermaster/whatsapp",
+                    metadata={"provider": "kirago", "status": "no_token"},
+                )
                 return {"status": "no_token", "provider": "kirago"}
             sc, data = await _kira("get", "/session/status", token=token)
             if sc != 200:
-                return {"status": "disconnected", "provider": "kirago"}
-            d = data.get("data") or data
-            if d.get("Connected") and d.get("LoggedIn"):
-                mapped = "connected"
-            elif d.get("LoggedIn"):
-                mapped = "connecting"
-            else:
                 mapped = "disconnected"
+            else:
+                d = data.get("data") or data
+                if d.get("Connected") and d.get("LoggedIn"):
+                    mapped = "connected"
+                elif d.get("LoggedIn"):
+                    mapped = "connecting"
+                else:
+                    mapped = "disconnected"
         else:
-            instance = _instance(rid(user))
+            instance = _instance(restaurant_id)
             sc, data = await _evo("get", f"/instance/connectionState/{instance}")
             if sc == 404:
-                return {"status": "disconnected", "provider": "evolution"}
-            state = (data.get("instance") or data).get("state", "close")
-            mapped = {"open": "connected", "close": "disconnected", "connecting": "connecting"}.get(state, state)
+                mapped = "disconnected"
+            else:
+                state = (data.get("instance") or data).get("state", "close")
+                mapped = {"open": "connected", "close": "disconnected", "connecting": "connecting"}.get(state, state)
 
         await db.restaurants.update_one(
-            {"id": rid(user)},
+            {"id": restaurant_id},
             {"$set": {"wa_status": mapped, "wa_updated_at": now_iso()}},
         )
+        if mapped == "connected":
+            await resolve_operational_alert(restaurant_id, "whatsapp_disconnected")
+        elif mapped in ("disconnected", "close", "no_token"):
+            await upsert_operational_alert(
+                restaurant_id,
+                "whatsapp_disconnected",
+                "WhatsApp desconectado",
+                "A conexao do WhatsApp caiu. Clientes podem deixar de receber avisos automaticos do pedido ate reconectar.",
+                severity="critical",
+                category="whatsapp",
+                action_label="Reconectar agora",
+                action_url="/supermaster/whatsapp",
+                metadata={"provider": provider, "status": mapped},
+            )
         return {"status": mapped, "provider": provider}
     except HTTPException as e:
         if e.status_code in (503, 504):
+            await upsert_operational_alert(
+                restaurant_id,
+                "whatsapp_disconnected",
+                "WhatsApp indisponivel",
+                "Nao foi possivel falar com o provedor de WhatsApp. Verifique a conexao e tente reconectar.",
+                severity="critical",
+                category="whatsapp",
+                action_label="Verificar WhatsApp",
+                action_url="/supermaster/whatsapp",
+                metadata={"provider": provider, "error": e.detail},
+            )
             return {"status": "disconnected", "provider": provider}
         raise
 

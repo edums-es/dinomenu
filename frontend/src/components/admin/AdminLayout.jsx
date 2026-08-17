@@ -12,7 +12,7 @@ import {
   Image, BarChart3, Settings, LogOut, Menu, X, ExternalLink,
   PackageSearch, Gift, Layers, Users, Building2, ShoppingCart,
   Wallet, Truck, QrCode, ChevronDown, ChevronRight, MessageCircle, BadgePlus,
-  Sparkles,
+  Sparkles, Bell, AlertTriangle, CheckCircle2,
 } from "lucide-react";
 
 const NAV_GROUPS = [
@@ -57,6 +57,7 @@ const NAV_GROUPS = [
     label: "Gestão",
     items: [
       { to: "/supermaster/relatorios",   label: "Relatórios",    icon: BarChart3 },
+      { to: "/supermaster/avisos",        label: "Avisos",        icon: Bell },
       { to: "/supermaster/whatsapp",     label: "WhatsApp",      icon: MessageCircle },
       { to: "/supermaster/configuracoes", label: "Configurações", icon: Settings },
     ],
@@ -188,6 +189,141 @@ function LegacyUpdateNotice() {
   );
 }
 
+function OperationalAlertCenter() {
+  const navigate = useNavigate();
+  const [summary, setSummary] = useState({ active: 0, critical: 0, warning: 0, unread: 0, top_alert: null });
+  const [open, setOpen] = useState(false);
+  const [alerts, setAlerts] = useState([]);
+
+  const loadSummary = async () => {
+    try {
+      const { data } = await api.get("/admin/alerts/summary", { skipCache: true });
+      setSummary(data || {});
+    } catch {}
+  };
+
+  const loadAlerts = async () => {
+    try {
+      const { data } = await api.get("/admin/alerts", { skipCache: true });
+      setAlerts(data?.alerts || []);
+      setSummary(data?.summary || {});
+    } catch {}
+  };
+
+  useEffect(() => {
+    loadSummary();
+    const timer = setInterval(loadSummary, 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const resolveAlert = async (alertId) => {
+    try {
+      await api.put(`/admin/alerts/${alertId}/resolve`);
+      await loadAlerts();
+    } catch {}
+  };
+
+  const topAlert = summary.top_alert;
+  const tone = summary.critical > 0 ? "red" : summary.warning > 0 ? "amber" : "slate";
+  const toneClass = {
+    red: "text-red-500 border-red-500/40 bg-red-500/10",
+    amber: "text-amber-500 border-amber-500/40 bg-amber-500/10",
+    slate: "text-gray-500 border-gray-300 dark:border-gray-700 bg-transparent",
+  }[tone];
+
+  return (
+    <>
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => {
+            setOpen((value) => !value);
+            loadAlerts();
+          }}
+          className={`relative grid h-9 w-9 place-items-center rounded-lg border transition-colors ${toneClass}`}
+          title="Avisos operacionais"
+        >
+          <Bell className="w-4 h-4" />
+          {summary.active > 0 && (
+            <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-red-500 px-1 text-[10px] font-bold leading-4 text-white">
+              {summary.active > 9 ? "9+" : summary.active}
+            </span>
+          )}
+        </button>
+        {open && (
+          <div className="absolute right-0 top-11 z-50 w-[min(92vw,380px)] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-[#111111]">
+            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 dark:border-gray-800">
+              <div>
+                <p className="text-sm font-bold dark:text-white">Avisos operacionais</p>
+                <p className="text-xs text-gray-500">{summary.active || 0} aviso(s) ativo(s)</p>
+              </div>
+              <button onClick={() => navigate("/supermaster/avisos")} className="text-xs font-semibold text-emerald-500">
+                Ver todos
+              </button>
+            </div>
+            <div className="max-h-80 overflow-y-auto p-2">
+              {alerts.length === 0 ? (
+                <div className="grid place-items-center gap-2 px-4 py-8 text-center">
+                  <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+                  <p className="text-sm font-semibold dark:text-white">Tudo certo por aqui</p>
+                  <p className="text-xs text-gray-500">Se algo cair, o sistema avisa neste painel.</p>
+                </div>
+              ) : alerts.slice(0, 6).map((alert) => (
+                <div key={alert.id} className="rounded-xl px-3 py-3 hover:bg-gray-50 dark:hover:bg-white/5">
+                  <div className="flex items-start gap-3">
+                    <span className={`mt-0.5 grid h-7 w-7 place-items-center rounded-lg ${alert.severity === "critical" ? "bg-red-500/10 text-red-500" : "bg-amber-500/10 text-amber-500"}`}>
+                      <AlertTriangle className="w-4 h-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold dark:text-white">{alert.title}</p>
+                      <p className="mt-0.5 line-clamp-2 text-xs text-gray-500">{alert.message}</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {alert.action_url && (
+                          <button
+                            onClick={() => {
+                              setOpen(false);
+                              navigate(alert.action_url);
+                            }}
+                            className="text-xs font-semibold text-emerald-500"
+                          >
+                            {alert.action_label || "Verificar"}
+                          </button>
+                        )}
+                        <button onClick={() => resolveAlert(alert.id)} className="text-xs font-semibold text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+                          Resolver
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {topAlert?.severity === "critical" && (
+        <div className="fixed left-0 right-0 top-14 z-20 border-y border-red-500/20 bg-red-950/95 px-4 py-2 text-sm text-red-100 shadow-lg lg:left-64">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
+            <span className="flex min-w-0 items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-red-300" />
+              <span className="truncate">
+                <strong>{topAlert.title}:</strong> {topAlert.message}
+              </span>
+            </span>
+            <button
+              onClick={() => navigate(topAlert.action_url || "/supermaster/avisos")}
+              className="shrink-0 rounded-lg bg-red-500 px-3 py-1 text-xs font-bold text-white hover:bg-red-600"
+            >
+              {topAlert.action_label || "Verificar"}
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function AdminLayout() {
   const { user, logout } = useAuth();
   const { brand } = useBrand();
@@ -243,6 +379,7 @@ export default function AdminLayout() {
           <div className="flex-1" />
           <div className="flex items-center gap-2">
             <LegacyUpdateNotice />
+            <OperationalAlertCenter />
             <Link to={`/loja/${restaurantSlug}`} target="_blank"
               className="hidden sm:flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white px-2 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
               Ver cardápio <ExternalLink className="w-3 h-3" />

@@ -32,6 +32,7 @@ const Tables = lazy(() => import("@/pages/admin/Tables"));
 const Waiters = lazy(() => import("@/pages/admin/Waiters"));
 const DeliveryPeople = lazy(() => import("@/pages/admin/DeliveryPeople"));
 const WhatsApp = lazy(() => import("@/pages/admin/WhatsApp"));
+const AdminAlerts = lazy(() => import("@/pages/admin/Alerts"));
 const SuperLayout = lazy(() => import("@/components/super/SuperLayout"));
 const SuperDashboard = lazy(() => import("@/pages/super/SuperDashboard"));
 const Restaurants = lazy(() => import("@/pages/super/Restaurants"));
@@ -96,6 +97,7 @@ function App() {
               <Route path="cupons" element={<Coupons />} />
               <Route path="banners" element={<Banners />} />
               <Route path="relatorios" element={<Reports />} />
+              <Route path="avisos" element={<AdminAlerts />} />
               <Route path="whatsapp" element={<WhatsApp />} />
               <Route path="configuracoes" element={<Settings />} />
             </Route>

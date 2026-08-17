@@ -111,15 +111,52 @@ async def send_whatsapp(restaurant, to_phone, message):
         raw = "55" + raw
 
     provider = (await _platform("wa_provider", "evolution")).lower()
+    restaurant_id = restaurant.get("id")
 
     if provider == "kirago":
         token = restaurant.get("kirago_token", "")
         if not token:
             logger.warning(f"[WA/Kira] restaurante {restaurant.get('id')} sem token Kirago")
+            try:
+                from operational_alerts import upsert_operational_alert
+                await upsert_operational_alert(
+                    restaurant_id,
+                    "whatsapp_disconnected",
+                    "WhatsApp precisa de atencao",
+                    "O token do WhatsApp nao esta configurado. As mensagens automaticas para clientes nao serao enviadas.",
+                    severity="warning",
+                    category="whatsapp",
+                    action_label="Configurar WhatsApp",
+                    action_url="/supermaster/whatsapp",
+                    metadata={"provider": "kirago", "reason": "missing_token"},
+                )
+            except Exception:
+                pass
             return False
-        return await _send_via_kirago(token, raw, message)
+        sent = await _send_via_kirago(token, raw, message)
+    else:
+        sent = await _send_via_evolution(restaurant["id"], raw, message)
 
-    return await _send_via_evolution(restaurant["id"], raw, message)
+    try:
+        from operational_alerts import resolve_operational_alert, upsert_operational_alert
+        if sent:
+            await resolve_operational_alert(restaurant_id, "whatsapp_disconnected")
+            await resolve_operational_alert(restaurant_id, "whatsapp_send_failed")
+        else:
+            await upsert_operational_alert(
+                restaurant_id,
+                "whatsapp_send_failed",
+                "Falha ao enviar WhatsApp",
+                "Uma mensagem automatica nao foi entregue. Verifique se o WhatsApp esta conectado e faca um envio de teste.",
+                severity="critical",
+                category="whatsapp",
+                action_label="Testar WhatsApp",
+                action_url="/supermaster/whatsapp",
+                metadata={"provider": provider, "to": raw[-4:]},
+            )
+    except Exception:
+        pass
+    return sent
 
 
 STATUS_MESSAGES = {
@@ -189,7 +226,9 @@ async def notify_order_status(order, new_status):
             if sent:
                 return
             logger.warning("[WA] Flemy Push falhou; usando provider Start como fallback")
-        await send_whatsapp(restaurant, customer_phone, msg)
+        sent = await send_whatsapp(restaurant, customer_phone, msg)
+        if not sent:
+            logger.warning("[WA] notificacao de status nao entregue para pedido %s", order.get("id"))
     except Exception as e:
         logger.error(f"[WA] Erro ao enviar status {new_status} para pedido {order.get('id')}: {e}")
 
