@@ -106,3 +106,63 @@ def test_customer_aggregation_pipeline():
         "last_order": "2026-01-02",
         "first_order": "2026-01-01",
     }]
+
+
+def test_customer_aggregation_supports_conditional_metrics_and_sets():
+    documents = [
+        {
+            "restaurant_id": "r1",
+            "status": "completed",
+            "customer": {"name": "Ana", "phone": "27999999999"},
+            "address": {"neighborhood": "Centro"},
+            "payment_method": "pix",
+            "items": [{"product_name": "Pizza", "quantity": 2}],
+            "total": 20,
+            "created_at": "2026-01-01",
+        },
+        {
+            "restaurant_id": "r1",
+            "status": "cancelled",
+            "customer": {"name": "Ana", "phone": "27999999999"},
+            "address": {"neighborhood": "Centro"},
+            "payment_method": "cash",
+            "items": [{"product_name": "Lanche", "quantity": 1}],
+            "total": 99,
+            "created_at": "2026-01-02",
+        },
+        {
+            "restaurant_id": "r1",
+            "status": "accepted",
+            "customer": {"name": "Ana", "phone": "27999999999"},
+            "address": {"neighborhood": "Praia"},
+            "payment_method": "pix",
+            "items": [{"product_name": "Pizza", "quantity": 1}],
+            "total": 30,
+            "created_at": "2026-01-03",
+        },
+    ]
+    pipeline = [
+        {"$match": {"restaurant_id": "r1", "customer.phone": {"$nin": [None, ""]}}},
+        {"$group": {
+            "_id": "$customer.phone",
+            "valid_order_count": {"$sum": {"$cond": [{"$ne": ["$status", "cancelled"]}, 1, 0]}},
+            "cancelled_count": {"$sum": {"$cond": [{"$eq": ["$status", "cancelled"]}, 1, 0]}},
+            "total_spent": {"$sum": {"$cond": [{"$ne": ["$status", "cancelled"]}, "$total", 0]}},
+            "neighborhoods": {"$addToSet": "$address.neighborhood"},
+            "payment_methods": {"$addToSet": "$payment_method"},
+            "items_history": {"$push": "$items"},
+        }},
+    ]
+
+    result = _aggregate(documents, pipeline)[0]
+
+    assert result["valid_order_count"] == 2
+    assert result["cancelled_count"] == 1
+    assert result["total_spent"] == 50
+    assert result["neighborhoods"] == ["Centro", "Praia"]
+    assert result["payment_methods"] == ["pix", "cash"]
+    assert result["items_history"] == [
+        [{"product_name": "Pizza", "quantity": 2}],
+        [{"product_name": "Lanche", "quantity": 1}],
+        [{"product_name": "Pizza", "quantity": 1}],
+    ]

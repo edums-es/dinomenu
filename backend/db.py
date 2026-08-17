@@ -215,6 +215,46 @@ def _apply_update(document, update, inserting=False):
     return result
 
 
+def _eval_expression(document, expression):
+    if isinstance(expression, str) and expression.startswith("$"):
+        return _get(document, expression[1:])
+    if isinstance(expression, list):
+        return [_eval_expression(document, item) for item in expression]
+    if not isinstance(expression, dict):
+        return expression
+
+    if "$cond" in expression:
+        condition = expression["$cond"]
+        if isinstance(condition, list):
+            test, if_true, if_false = (condition + [None, None, None])[:3]
+        else:
+            test = condition.get("if")
+            if_true = condition.get("then")
+            if_false = condition.get("else")
+        return _eval_expression(document, if_true if _eval_expression(document, test) else if_false)
+
+    if "$eq" in expression:
+        left, right = _eval_expression(document, expression["$eq"])
+        return left == right
+    if "$ne" in expression:
+        left, right = _eval_expression(document, expression["$ne"])
+        return left != right
+    if "$gt" in expression:
+        left, right = _eval_expression(document, expression["$gt"])
+        return left > right
+    if "$gte" in expression:
+        left, right = _eval_expression(document, expression["$gte"])
+        return left >= right
+    if "$lt" in expression:
+        left, right = _eval_expression(document, expression["$lt"])
+        return left < right
+    if "$lte" in expression:
+        left, right = _eval_expression(document, expression["$lte"])
+        return left <= right
+
+    return {key: _eval_expression(document, value) for key, value in expression.items()}
+
+
 class Cursor:
     def __init__(self, collection, query=None, projection=None, pipeline=None):
         self.collection = collection
@@ -266,13 +306,13 @@ def _aggregate(documents, pipeline):
                     if name == "_id":
                         continue
                     operator, expression = next(iter(accumulator.items()))
-                    value = _get(doc, expression[1:]) if isinstance(expression, str) and expression.startswith("$") else expression
+                    value = _eval_expression(doc, expression)
                     values = bucket["__values"].setdefault(name, [])
                     values.append(value)
                     if operator == "$last":
                         bucket[name] = value
                     elif operator == "$sum":
-                        bucket[name] = sum(v if isinstance(v, (int, float)) else 1 for v in values)
+                        bucket[name] = sum(v for v in values if isinstance(v, (int, float)))
                     elif operator == "$avg":
                         numeric = [v for v in values if isinstance(v, (int, float))]
                         bucket[name] = sum(numeric) / len(numeric) if numeric else 0
@@ -280,6 +320,14 @@ def _aggregate(documents, pipeline):
                         bucket[name] = max(v for v in values if v is not None)
                     elif operator == "$min":
                         bucket[name] = min(v for v in values if v is not None)
+                    elif operator == "$addToSet":
+                        unique = []
+                        for item in values:
+                            if item not in unique:
+                                unique.append(item)
+                        bucket[name] = unique
+                    elif operator == "$push":
+                        bucket[name] = list(values)
             result = []
             for bucket in groups.values():
                 bucket.pop("__values", None)
