@@ -2,6 +2,7 @@
 import asyncio
 import io
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 
 import openpyxl
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
@@ -1029,21 +1030,37 @@ async def delete_banner(bid: str, user=Depends(require_restaurant)):
 
 
 # ---------- dashboard & reports ----------
-def _today_start_iso():
+try:
+    APP_TZ = ZoneInfo("America/Sao_Paulo")
+except Exception:
+    APP_TZ = timezone(timedelta(hours=-3))
+
+
+def _local_day(value):
+    if not value:
+        return ""
     try:
-        from zoneinfo import ZoneInfo
-        now = datetime.now(ZoneInfo("America/Sao_Paulo"))
+        if isinstance(value, datetime):
+            dt = value
+        else:
+            raw = str(value)
+            if raw.endswith("Z"):
+                raw = f"{raw[:-1]}+00:00"
+            dt = datetime.fromisoformat(raw)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(APP_TZ).date().isoformat()
     except Exception:
-        now = datetime.now()
+        return str(value)[:10]
+
+
+def _today_start_iso():
+    now = _local_now()
     return now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
 
 
 def _local_now():
-    try:
-        from zoneinfo import ZoneInfo
-        return datetime.now(ZoneInfo("America/Sao_Paulo"))
-    except Exception:
-        return datetime.now()
+    return datetime.now(APP_TZ)
 
 
 @router.get("/dashboard")
@@ -1051,9 +1068,9 @@ async def dashboard(user=Depends(require_restaurant)):
     r = await db.restaurants.find_one({"id": rid(user)})
     orders = await db.orders.find({"restaurant_id": rid(user)}, {"_id": 0}).to_list(5000)
     today = _today_start_iso()[:10]
-    today_orders = [o for o in orders if (o.get("created_at") or "")[:10] == today and o.get("status") != "cancelled"]
-    cancelled_today = [o for o in orders if (o.get("created_at") or "")[:10] == today and o.get("status") == "cancelled"]
-    revenue = sum(o["total"] for o in today_orders)
+    today_orders = [o for o in orders if _local_day(o.get("created_at")) == today and o.get("status") != "cancelled"]
+    cancelled_today = [o for o in orders if _local_day(o.get("created_at")) == today and o.get("status") == "cancelled"]
+    revenue = sum(float(o.get("total") or 0) for o in today_orders)
     in_progress = [o for o in orders if o.get("status") in ("pending", "accepted", "preparing", "ready", "out_for_delivery")]
 
     # top products
@@ -1083,7 +1100,8 @@ async def reports_daily(days: int = 14, user=Depends(require_restaurant)):
     days = min(max(days or 14, 1), 90)
     now = _local_now()
     start_day = (now - timedelta(days=days - 1)).date()
-    start = datetime.combine(start_day, datetime.min.time()).isoformat()
+    start_local = datetime.combine(start_day, datetime.min.time(), tzinfo=APP_TZ)
+    start = start_local.astimezone(timezone.utc).isoformat()
     orders = await db.orders.find(
         {"restaurant_id": rid(user), "created_at": {"$gte": start}},
         {"_id": 0},
@@ -1095,7 +1113,7 @@ async def reports_daily(days: int = 14, user=Depends(require_restaurant)):
         rows[day] = {"date": day, "orders": 0, "revenue": 0.0}
 
     for order in orders:
-        day = (order.get("created_at") or "")[:10]
+        day = _local_day(order.get("created_at"))
         if day not in rows or order.get("status") == "cancelled":
             continue
         rows[day]["orders"] += 1
