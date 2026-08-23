@@ -106,7 +106,7 @@ async def regenerate_token(user=Depends(require_restaurant)):
 @router.post("/test")
 async def test_event(user=Depends(require_restaurant)):
     restaurant = await db.restaurants.find_one({"id": rid(user)}, {"_id": 0})
-    ok = await emit_flemy_event(restaurant, "order.status_changed", data={"test": True, "message": "Integracao Dino Menu conectada"})
+    ok = await emit_flemy_event(restaurant, "order.status_changed", data={"test": True, "message": "Integracao EG Delivery conectada"})
     if not ok:
         raise HTTPException(400, "Falha ao enviar. Confira URL, ativacao e evento habilitado.")
     return {"ok": True}
@@ -118,8 +118,8 @@ async def test_push(body: dict, user=Depends(require_restaurant)):
     ok = await send_flemy_push(
         restaurant,
         body.get("phone", ""),
-        f"Teste Dino Menu + Flemy conectado para {restaurant.get('name', '')}.",
-        f"dinomenu:test:{now_iso()}",
+        f"Teste EG Delivery + Flemy conectado para {restaurant.get('name', '')}.",
+        f"egdelivery:test:{now_iso()}",
     )
     if not ok:
         raise HTTPException(400, "Falha no Push. Confira URL autenticada, ativacao e telefone.")

@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/admin/whatsapp", tags=["whatsapp"])
 
 TIMEOUT = 15
+VALID_NOTIFY_STATUSES = {"accepted", "preparing", "ready", "out_for_delivery", "completed", "cancelled"}
+VALID_TRACKING_LINK_MODES = {"first", "all", "none"}
 
 
 async def _get_platform(key, fallback=""):
@@ -291,19 +293,45 @@ async def wa_disconnect(user=Depends(require_restaurant)):
 
 @router.get("/settings")
 async def wa_get_settings(user=Depends(require_restaurant)):
-    r = await db.restaurants.find_one({"id": rid(user)}, {"wa_notify_statuses": 1, "_id": 0})
+    r = await db.restaurants.find_one(
+        {"id": rid(user)},
+        {"wa_notify_statuses": 1, "wa_tracking_link_mode": 1, "wa_message_templates": 1, "_id": 0},
+    )
     default = ["accepted", "preparing", "ready", "out_for_delivery", "completed", "cancelled"]
-    return {"notify_statuses": (r or {}).get("wa_notify_statuses", default)}
+    return {
+        "notify_statuses": (r or {}).get("wa_notify_statuses", default),
+        "tracking_link_mode": (r or {}).get("wa_tracking_link_mode", "first"),
+        "message_templates": (r or {}).get("wa_message_templates", {}),
+    }
 
 
 @router.put("/settings")
 async def wa_update_settings(body: dict, user=Depends(require_restaurant)):
-    statuses = body.get("notify_statuses", [])
+    statuses = [item for item in body.get("notify_statuses", []) if item in VALID_NOTIFY_STATUSES]
+    tracking_link_mode = (body.get("tracking_link_mode") or "first").strip().lower()
+    if tracking_link_mode not in VALID_TRACKING_LINK_MODES:
+        tracking_link_mode = "first"
+    raw_templates = body.get("message_templates") or {}
+    templates = {
+        key: str(value).strip()[:1200]
+        for key, value in raw_templates.items()
+        if key in VALID_NOTIFY_STATUSES and str(value).strip()
+    }
     await db.restaurants.update_one(
         {"id": rid(user)},
-        {"$set": {"wa_notify_statuses": statuses, "updated_at": now_iso()}},
+        {"$set": {
+            "wa_notify_statuses": statuses,
+            "wa_tracking_link_mode": tracking_link_mode,
+            "wa_message_templates": templates,
+            "updated_at": now_iso(),
+        }},
     )
-    return {"ok": True, "notify_statuses": statuses}
+    return {
+        "ok": True,
+        "notify_statuses": statuses,
+        "tracking_link_mode": tracking_link_mode,
+        "message_templates": templates,
+    }
 
 
 @router.post("/test")
@@ -315,7 +343,7 @@ async def wa_send_test(body: dict, user=Depends(require_restaurant)):
     if not restaurant:
         raise HTTPException(404, "Restaurante nao encontrado")
     from whatsapp import send_whatsapp
-    ok = await send_whatsapp(restaurant, phone, "Teste Menu Digital - WhatsApp configurado!")
+    ok = await send_whatsapp(restaurant, phone, "Teste EG Delivery - WhatsApp configurado!")
     if not ok:
         raise HTTPException(400, "Falha ao enviar. Verifique a conexao WhatsApp.")
     return {"ok": True}

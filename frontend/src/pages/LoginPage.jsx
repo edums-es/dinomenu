@@ -79,7 +79,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const loggedUser = await login(email, password);
-      toast.success(`Bem-vindo ao ${brand.name || "Dino Menu"}!`);
+      toast.success(`Bem-vindo ao ${brand.name || "EG Delivery"}!`);
       navigate(loggedUser.role === "super_admin" ? "/super" : "/supermaster", { replace: true });
     } catch (error) {
       toast.error(formatApiError(error.response?.data?.detail) || "Falha no login");

@@ -259,12 +259,12 @@ export default function PlatformSettings() {
         <div className="grid sm:grid-cols-2 gap-4">
           <Field label="Nome do sistema">
             <Input value={settings.platform_name || ""} onChange={(e) => set("platform_name")(e.target.value)}
-              placeholder="Dino Menu"
+              placeholder="EG Delivery"
               className="dark:bg-[#0D1117] dark:border-gray-700 dark:text-gray-200" />
           </Field>
           <Field label="Nome curto">
             <Input value={settings.platform_short_name || ""} onChange={(e) => set("platform_short_name")(e.target.value)}
-              placeholder="Dino Menu"
+              placeholder="EG Delivery"
               className="dark:bg-[#0D1117] dark:border-gray-700 dark:text-gray-200" />
           </Field>
           <Field label="Slogan">

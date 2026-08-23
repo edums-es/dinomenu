@@ -2,8 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import api, { fileUrl } from "@/lib/api";
 
 export const DEFAULT_BRAND = {
-  name: "Dino Menu",
-  short_name: "Dino Menu",
+  name: "EG Delivery",
+  short_name: "EG Delivery",
   tagline: "Cardapio digital",
   description: "Cardapio digital e delivery online.",
   logo_url: "",

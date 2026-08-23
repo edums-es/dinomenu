@@ -9,6 +9,10 @@
       "destination": "https://api.easygrowth.com.br/api/public/restaurants/:slug/page"
     },
     {
+      "source": "/pedido/:order_id",
+      "destination": "https://api.easygrowth.com.br/api/public/orders/:order_id/page"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

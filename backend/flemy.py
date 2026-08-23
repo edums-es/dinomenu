@@ -37,9 +37,9 @@ def whatsapp_phone(value):
 
 
 def public_frontend_url():
-    url = (os.environ.get("FRONTEND_URL") or os.environ.get("PUBLIC_URL") or "https://dinomenu.online").strip().rstrip("/")
+    url = (os.environ.get("FRONTEND_URL") or os.environ.get("PUBLIC_URL") or "https://app.easygrowth.com.br").strip().rstrip("/")
     if "localhost" in url or "127.0.0.1" in url:
-        return "https://dinomenu.online"
+        return "https://app.easygrowth.com.br"
     return url
 
 

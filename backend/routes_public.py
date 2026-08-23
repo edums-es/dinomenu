@@ -44,8 +44,8 @@ def table_number_values(value):
 
 
 WHITE_LABEL_DEFAULTS = {
-    "name": "Dino Menu",
-    "short_name": "Dino Menu",
+    "name": "EG Delivery",
+    "short_name": "EG Delivery",
     "tagline": "Cardapio digital",
     "description": "Cardapio digital e delivery online.",
     "logo_url": "",
@@ -153,7 +153,7 @@ async def public_platform_config():
 async def public_location(request: Request, lat: float = None, lon: float = None):
     headers = {
         "Accept-Language": "pt-BR",
-        "User-Agent": "DinoMenu/1.0 (https://dinomenu.online)",
+        "User-Agent": "EGDelivery/1.0 (https://app.easygrowth.com.br)",
     }
     async with httpx.AsyncClient(timeout=7, headers=headers) as client:
         if lat is not None and lon is not None:
@@ -256,6 +256,22 @@ def _public_menu_url(frontend_base: str, slug: str, request: Request) -> str:
     return f"{url}?{urlencode(query)}" if query else url
 
 
+def _public_order_url(frontend_base: str, order_id: str) -> str:
+    return f"{frontend_base}/pedido/{order_id}"
+
+
+def _preview_image_url(restaurant: dict | None, brand: dict | None, frontend_base: str, request: Request) -> str:
+    restaurant = restaurant or {}
+    brand = brand or {}
+    return _absolute_url(
+        restaurant.get("logo_url")
+        or restaurant.get("cover_url")
+        or brand.get("logo_url")
+        or f"{frontend_base}/logoeg.png",
+        request,
+    )
+
+
 @router.get("/restaurants/{slug}/page", response_class=HTMLResponse)
 async def restaurant_menu_page(slug: str, request: Request):
     """Return the SPA shell with metadata belonging only to the restaurant."""
@@ -269,7 +285,7 @@ async def restaurant_menu_page(slug: str, request: Request):
         quote=True,
     )
     image = html.escape(
-        _absolute_url(r.get("logo_url") or r.get("cover_url") or f"{frontend_base}/dinomenu-share.svg", request),
+        _preview_image_url(r, None, frontend_base, request),
         quote=True,
     )
     canonical = html.escape(_public_menu_url(frontend_base, slug, request), quote=True)
@@ -304,7 +320,7 @@ async def restaurant_menu_page(slug: str, request: Request):
 async def restaurant_share_preview(slug: str, request: Request):
     r = await _get_restaurant_or_404(slug)
     brand = public_white_label_config(await db.platform_settings.find_one({"_id": "global"}, {"_id": 0}) or {})
-    name = html.escape(r.get("name") or brand.get("name") or "Dino Menu")
+    name = html.escape(r.get("name") or brand.get("name") or "EG Delivery")
     site_name = name
     description = html.escape(
         r.get("tagline")
@@ -312,7 +328,7 @@ async def restaurant_share_preview(slug: str, request: Request):
         or "Acesse o cardapio digital e faca seu pedido online."
     )
     frontend_base = _frontend_base_url(request)
-    image = _absolute_url(r.get("logo_url") or r.get("cover_url") or brand.get("logo_url") or f"{frontend_base}/dinomenu-share.svg", request)
+    image = _preview_image_url(r, brand, frontend_base, request)
     url = _public_menu_url(frontend_base, slug, request)
     safe_url = html.escape(url, quote=True)
     redirect_url = json.dumps(url)
@@ -345,6 +361,63 @@ async def restaurant_share_preview(slug: str, request: Request):
     <a href="{safe_url}">Abrir cardapio</a>
   </body>
 </html>"""
+
+
+@router.get("/orders/{order_id}/page", response_class=HTMLResponse)
+async def order_tracking_page(order_id: str, request: Request):
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido nao encontrado")
+    restaurant = await db.restaurants.find_one({"id": order.get("restaurant_id")}, {"_id": 0}) or {}
+    frontend_base = _frontend_base_url(request)
+    brand = public_white_label_config(await db.platform_settings.find_one({"_id": "global"}, {"_id": 0}) or {})
+    restaurant_name = restaurant.get("name") or brand.get("name") or "EG Delivery"
+    order_number = order.get("order_number") or order_id
+    status = order.get("status") or "pending"
+    status_label = {
+        "pending": "pedido recebido",
+        "accepted": "pedido aceito",
+        "preparing": "pedido em preparo",
+        "ready": "pedido pronto",
+        "out_for_delivery": "pedido saiu para entrega",
+        "completed": "pedido entregue",
+        "cancelled": "pedido cancelado",
+    }.get(status, "acompanhe seu pedido")
+    title = html.escape(f"Pedido #{order_number} - {restaurant_name}", quote=True)
+    description = html.escape(f"Acompanhe em tempo real: {status_label}.", quote=True)
+    image = html.escape(_preview_image_url(restaurant, brand, frontend_base, request), quote=True)
+    canonical = html.escape(_public_order_url(frontend_base, order_id), quote=True)
+    preview_meta = f"""
+    <title>{title}</title>
+    <meta name="description" content="{description}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="{title}" />
+    <meta property="og:description" content="{description}" />
+    <meta property="og:image" content="{image}" />
+    <meta property="og:image:secure_url" content="{image}" />
+    <meta property="og:url" content="{canonical}" />
+    <meta property="og:site_name" content="{html.escape(restaurant_name, quote=True)}" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="{title}" />
+    <meta name="twitter:description" content="{description}" />
+    <meta name="twitter:image" content="{image}" />
+    <link rel="canonical" href="{canonical}" />
+    """
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            response = await client.get(f"{frontend_base}/")
+            response.raise_for_status()
+        page = _inject_preview_metadata(response.text, preview_meta)
+    except httpx.HTTPError as exc:
+        logger.error("Falha ao carregar shell de acompanhamento: %s", exc)
+        raise HTTPException(status_code=502, detail="Acompanhamento temporariamente indisponivel")
+    return HTMLResponse(page, headers={"Cache-Control": "public, max-age=60, stale-while-revalidate=300"})
+
+
+@router.get("/orders/{order_id}/share", response_class=HTMLResponse)
+async def order_share_preview(order_id: str, request: Request):
+    page = await order_tracking_page(order_id, request)
+    return page
 
 
 @router.get("/restaurants/{slug}/identity")

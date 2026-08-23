@@ -159,26 +159,25 @@ async def send_whatsapp(restaurant, to_phone, message):
     return sent
 
 
+TRACKING_LINK_MODES = {"first", "all", "none"}
+TRACKING_STATUS_ORDER = ["accepted", "preparing", "ready", "out_for_delivery"]
+
 STATUS_MESSAGES = {
     "accepted": (
         "✅ *Pedido #{number} confirmado!*\n\n"
-        "Olá, *{name}*! Seu pedido foi aceito e já está sendo preparado com muito carinho.\n\n"
-        "\U0001f4f2 Acompanhe o status em tempo real:\n{tracking_url}"
+        "Olá, *{name}*! Seu pedido foi aceito e já está sendo preparado com muito carinho."
     ),
     "preparing": (
         "\U0001f468‍\U0001f373 *Pedido #{number} em preparo!*\n\n"
-        "Olá, *{name}*! Nossa equipe está com a mão na massa preparando o seu pedido agora.\n\n"
-        "\U0001f4f2 Acompanhe aqui:\n{tracking_url}"
+        "Olá, *{name}*! Nossa equipe está com a mão na massa preparando o seu pedido agora."
     ),
     "ready": (
         "\U0001f389 *Pedido #{number} pronto!*\n\n"
-        "Olá, *{name}*! Seu pedido ficou prontinho e está quentinho esperando por você!\n\n"
-        "\U0001f4f2 Acompanhe:\n{tracking_url}"
+        "Olá, *{name}*! Seu pedido ficou prontinho e está quentinho esperando por você!"
     ),
     "out_for_delivery": (
         "\U0001f6f5 *Pedido #{number} saiu para entrega!*\n\n"
-        "Olá, *{name}*! Seu pedido está a caminho! Em breve chegará até você.\n\n"
-        "\U0001f4f2 Acompanhe em tempo real:\n{tracking_url}"
+        "Olá, *{name}*! Seu pedido está a caminho! Em breve chegará até você."
     ),
     "completed": (
         "⭐ *Pedido #{number} entregue!*\n\n"
@@ -194,6 +193,68 @@ STATUS_MESSAGES = {
 }
 
 
+def _status_template(restaurant, status):
+    templates = restaurant.get("wa_message_templates") or {}
+    custom = templates.get(status)
+    if isinstance(custom, str) and custom.strip():
+        return custom.strip()
+    return STATUS_MESSAGES[status]
+
+
+def _tracking_link_mode(restaurant):
+    mode = (restaurant.get("wa_tracking_link_mode") or "first").strip().lower()
+    return mode if mode in TRACKING_LINK_MODES else "first"
+
+
+def _should_include_tracking_link(restaurant, status, enabled_statuses):
+    if status not in TRACKING_STATUS_ORDER:
+        return False
+    mode = _tracking_link_mode(restaurant)
+    if mode == "none":
+        return False
+    if mode == "all":
+        return True
+    first_enabled = next((item for item in TRACKING_STATUS_ORDER if item in enabled_statuses), None)
+    return status == first_enabled
+
+
+def _remove_tracking_placeholder_lines(template):
+    lines = [line for line in template.splitlines() if "{tracking_url}" not in line]
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return "\n".join(lines).strip()
+
+
+def _format_status_template(template, values):
+    message = template
+    for key, value in values.items():
+        message = message.replace("{" + key + "}", str(value))
+    return message
+
+
+def _build_status_message(order, restaurant, status):
+    default_statuses = ["accepted", "preparing", "ready", "out_for_delivery", "completed", "cancelled"]
+    enabled_statuses = restaurant.get("wa_notify_statuses", default_statuses)
+    include_tracking = _should_include_tracking_link(restaurant, status, enabled_statuses)
+    public_url = _restaurant_public_url(restaurant)
+    tracking_url = f"{public_url}/pedido/{order.get('id', '')}"
+    template = _status_template(restaurant, status)
+
+    if not include_tracking:
+        template = _remove_tracking_placeholder_lines(template)
+
+    message = _format_status_template(template, {
+        "number": order.get("order_number", ""),
+        "name": (order.get("customer") or {}).get("name", "cliente"),
+        "restaurant": restaurant.get("name", ""),
+        "tracking_url": tracking_url if include_tracking else "",
+    }).strip()
+
+    if include_tracking and "{tracking_url}" not in template:
+        message += f"\n\n\U0001f4f2 Acompanhe seu pedido:\n{tracking_url}"
+    return message
+
+
 async def notify_order_status(order, new_status):
     if new_status not in STATUS_MESSAGES:
         return
@@ -206,15 +267,8 @@ async def notify_order_status(order, new_status):
     default_statuses = ["accepted", "preparing", "ready", "out_for_delivery", "completed", "cancelled"]
     if new_status not in restaurant.get("wa_notify_statuses", default_statuses):
         return
-    public_url = _restaurant_public_url(restaurant)
-    tracking_url = f"{public_url}/pedido/{order.get('id', '')}"
     try:
-        msg = STATUS_MESSAGES[new_status].format(
-            number=order.get("order_number", ""),
-            name=(order.get("customer") or {}).get("name", "cliente"),
-            restaurant=restaurant.get("name", ""),
-            tracking_url=tracking_url,
-        )
+        msg = _build_status_message(order, restaurant, new_status)
         if restaurant.get("flemy_push_status_notifications"):
             from flemy import send_flemy_push
             sent = await send_flemy_push(

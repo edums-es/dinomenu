@@ -65,3 +65,68 @@ def test_status_notification_tracking_link_does_not_use_legacy_customer_domain(m
 
     assert "https://app.easygrowth.com.br/pedido/order-1" in sent["message"]
     assert "marisco27" not in sent["message"]
+
+
+def test_status_notification_default_sends_tracking_link_only_once():
+    restaurant = {
+        "id": "restaurant-1",
+        "name": "Open Foods",
+        "slug": "openfoods",
+    }
+    order = {
+        "id": "order-1",
+        "restaurant_id": "restaurant-1",
+        "order_number": 33,
+        "customer": {"name": "Karol", "phone": "(27) 99999-9999"},
+    }
+
+    accepted = whatsapp._build_status_message(order, restaurant, "accepted")
+    preparing = whatsapp._build_status_message(order, restaurant, "preparing")
+
+    assert "https://app.easygrowth.com.br/pedido/order-1" in accepted
+    assert "https://app.easygrowth.com.br/pedido/order-1" not in preparing
+
+
+def test_status_notification_tracking_link_mode_all_and_none():
+    order = {
+        "id": "order-1",
+        "restaurant_id": "restaurant-1",
+        "order_number": 33,
+        "customer": {"name": "Karol", "phone": "(27) 99999-9999"},
+    }
+
+    all_links = whatsapp._build_status_message(
+        order,
+        {"id": "restaurant-1", "name": "Open Foods", "wa_tracking_link_mode": "all"},
+        "out_for_delivery",
+    )
+    no_links = whatsapp._build_status_message(
+        order,
+        {"id": "restaurant-1", "name": "Open Foods", "wa_tracking_link_mode": "none"},
+        "accepted",
+    )
+
+    assert "https://app.easygrowth.com.br/pedido/order-1" in all_links
+    assert "https://app.easygrowth.com.br/pedido/order-1" not in no_links
+
+
+def test_custom_status_template_removes_tracking_placeholder_when_disabled():
+    order = {
+        "id": "order-1",
+        "restaurant_id": "restaurant-1",
+        "order_number": 33,
+        "customer": {"name": "Karol", "phone": "(27) 99999-9999"},
+    }
+    restaurant = {
+        "id": "restaurant-1",
+        "name": "Open Foods",
+        "wa_tracking_link_mode": "none",
+        "wa_message_templates": {
+            "accepted": "Pedido #{number}\nAcompanhe: {tracking_url}\nObrigado, {name}.",
+        },
+    }
+
+    message = whatsapp._build_status_message(order, restaurant, "accepted")
+
+    assert "Acompanhe:" not in message
+    assert "Obrigado, Karol." in message

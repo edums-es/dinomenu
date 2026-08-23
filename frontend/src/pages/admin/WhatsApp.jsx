@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 
 const STATUS_CFG = {
   connected:    { label: "Conectado",       color: "#10b981", spin: false },
@@ -28,6 +29,15 @@ const ALL_STATUSES = [
   { key: "completed",        label: "Entregue"             },
   { key: "cancelled",        label: "Cancelado"            },
 ];
+
+const DEFAULT_TEMPLATES = {
+  accepted: "✅ *Pedido #{number} confirmado!*\n\nOlá, *{name}*! Seu pedido foi aceito e já está sendo preparado com muito carinho.",
+  preparing: "👨‍🍳 *Pedido #{number} em preparo!*\n\nOlá, *{name}*! Nossa equipe está com a mão na massa preparando o seu pedido agora.",
+  ready: "🎉 *Pedido #{number} pronto!*\n\nOlá, *{name}*! Seu pedido ficou prontinho e está quentinho esperando por você!",
+  out_for_delivery: "🛵 *Pedido #{number} saiu para entrega!*\n\nOlá, *{name}*! Seu pedido está a caminho! Em breve chegará até você.",
+  completed: "⭐ *Pedido #{number} entregue!*\n\nOlá, *{name}*! Esperamos que tenha gostado!\nFoi um prazer atendê-lo(a). Obrigado por escolher o *{restaurant}*!\n\nAté o próximo pedido!",
+  cancelled: "❌ *Pedido #{number} cancelado*\n\nOlá, *{name}*. Infelizmente seu pedido foi cancelado.\n\nEntre em contato conosco para mais informações. Pedimos desculpas pelo transtorno!",
+};
 
 function StatusBadge({ status }) {
   const cfg = STATUS_CFG[status] || STATUS_CFG.disconnected;
@@ -53,6 +63,8 @@ export default function WhatsApp() {
   const [loadingQr, setLoadingQr]       = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [notifyStatuses, setNotifyStatuses] = useState([]);
+  const [trackingLinkMode, setTrackingLinkMode] = useState("first");
+  const [messageTemplates, setMessageTemplates] = useState({});
   const [savingSettings, setSavingSettings] = useState(false);
   const [testPhone, setTestPhone]       = useState("");
   const [testLoading, setTestLoading]   = useState(false);
@@ -87,6 +99,8 @@ export default function WhatsApp() {
     try {
       const r = await api.get("/admin/whatsapp/settings");
       setNotifyStatuses(r.data.notify_statuses || []);
+      setTrackingLinkMode(r.data.tracking_link_mode || "first");
+      setMessageTemplates(r.data.message_templates || {});
     } catch {}
   }, []);
 
@@ -174,7 +188,11 @@ export default function WhatsApp() {
   const saveSettings = async () => {
     setSavingSettings(true);
     try {
-      await api.put("/admin/whatsapp/settings", { notify_statuses: notifyStatuses });
+      await api.put("/admin/whatsapp/settings", {
+        notify_statuses: notifyStatuses,
+        tracking_link_mode: trackingLinkMode,
+        message_templates: messageTemplates,
+      });
       toast.success("Configuracoes salvas!");
     } catch {
       toast.error("Erro ao salvar");
@@ -187,6 +205,21 @@ export default function WhatsApp() {
     setNotifyStatuses((prev) =>
       prev.includes(key) ? prev.filter((s) => s !== key) : [...prev, key]
     );
+
+  const updateTemplate = (key, value) => {
+    setMessageTemplates((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  };
+
+  const resetTemplate = (key) => {
+    setMessageTemplates((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  };
 
   const sendTest = async () => {
     if (!testPhone) { toast.warning("Informe um telefone"); return; }
@@ -389,7 +422,7 @@ export default function WhatsApp() {
             Salvar
           </Button>
         </div>
-        <div className="p-6 space-y-3">
+        <div className="p-6 space-y-5">
           {ALL_STATUSES.map(({ key, label }) => (
             <div key={key} className="flex items-center justify-between py-1">
               <label className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none" htmlFor={"toggle-"+key}>
@@ -398,6 +431,55 @@ export default function WhatsApp() {
               <Switch id={"toggle-"+key} checked={notifyStatuses.includes(key)} onCheckedChange={() => toggleStatus(key)} />
             </div>
           ))}
+
+          <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
+            <label className="text-sm font-semibold dark:text-white block mb-1.5">Link de acompanhamento</label>
+            <select
+              value={trackingLinkMode}
+              onChange={(e) => setTrackingLinkMode(e.target.value)}
+              className="w-full h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm text-gray-900 outline-none dark:border-gray-700 dark:bg-[#0D1117] dark:text-white"
+            >
+              <option value="first">Enviar apenas na primeira mensagem ativa</option>
+              <option value="all">Enviar em todas as mensagens de andamento</option>
+              <option value="none">Nao enviar link de acompanhamento</option>
+            </select>
+            <p className="text-xs text-gray-400 mt-1">
+              Recomendado: apenas na primeira mensagem, para nao mandar o mesmo link repetido a cada mudanca de status.
+            </p>
+          </div>
+
+          <div className="pt-4 border-t border-gray-100 dark:border-gray-800 space-y-4">
+            <div>
+              <p className="text-sm font-semibold dark:text-white">Textos das mensagens</p>
+              <p className="text-xs text-gray-400 mt-1">
+                Use {"{number}"}, {"{name}"}, {"{restaurant}"} e, se quiser posicionar manualmente, {"{tracking_url}"}.
+              </p>
+            </div>
+            {ALL_STATUSES.map(({ key, label }) => (
+              <div key={`template-${key}`} className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">{label}</label>
+                  {messageTemplates[key] && (
+                    <button
+                      type="button"
+                      onClick={() => resetTemplate(key)}
+                      className="text-xs font-semibold text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                    >
+                      Restaurar padrao
+                    </button>
+                  )}
+                </div>
+                <Textarea
+                  value={messageTemplates[key] ?? DEFAULT_TEMPLATES[key]}
+                  onChange={(e) => updateTemplate(key, e.target.value)}
+                  rows={4}
+                  maxLength={1200}
+                  className="resize-y text-sm dark:bg-[#0D1117] dark:border-gray-700 dark:text-white"
+                />
+              </div>
+            ))}
+          </div>
+
           <div className="flex items-start gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
             <Info className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
             <p className="text-xs text-gray-400">
@@ -455,7 +537,7 @@ export default function WhatsApp() {
           <div className="flex items-start gap-3 bg-violet-50 dark:bg-violet-900/15 border border-violet-200 dark:border-violet-800 rounded-xl p-4">
             <Webhook className="w-4 h-4 text-violet-500 shrink-0 mt-0.5" />
             <p className="text-xs text-violet-700 dark:text-violet-300">
-              Cole abaixo a URL publica gerada pelo bloco <strong>Receber Webhook</strong> da Flemy. O Dino Menu enviara eventos estruturados e assinados para iniciar seus fluxos.
+              Cole abaixo a URL publica gerada pelo bloco <strong>Receber Webhook</strong> da Flemy. O EG Delivery enviara eventos estruturados e assinados para iniciar seus fluxos.
             </p>
           </div>
 
