@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   ArrowRight,
@@ -47,8 +47,9 @@ export default function LoginPage() {
   const { user, login, register } = useAuth();
   const { brand, loading: brandLoading, hasCachedBrand } = useBrand();
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState("login");
+  const [tab, setTab] = useState(() => new URLSearchParams(location.search).get("tab") === "register" ? "register" : "login");
   const [showPass, setShowPass] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -60,6 +61,12 @@ export default function LoginPage() {
   useEffect(() => {
     if (user?.role) navigate(user.role === "super_admin" ? "/super" : "/supermaster", { replace: true });
   }, [user, navigate]);
+
+  useEffect(() => {
+    const nextTab = new URLSearchParams(location.search).get("tab");
+    if (nextTab === "register") setTab("register");
+    if (nextTab === "login") setTab("login");
+  }, [location.search]);
 
   const focusInput = (event) => {
     const loginAccent = brand.login_accent_color || brand.primary_color || RED;

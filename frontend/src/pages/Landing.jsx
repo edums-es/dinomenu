@@ -11,8 +11,6 @@ import {
   LayoutDashboard,
   Menu,
   MessageCircle,
-  PackageCheck,
-  Play,
   ShieldCheck,
   Sparkles,
   Store,
@@ -28,7 +26,7 @@ const PANEL = "rgba(255,255,255,.055)";
 const NAV = [
   { label: "Inicio", id: "inicio" },
   { label: "Recursos", id: "recursos" },
-  { label: "Demonstracao", id: "demonstracao" },
+  { label: "Telas", id: "telas" },
   { label: "FAQ", id: "faq" },
   { label: "Contato", id: "contato" },
 ];
@@ -81,6 +79,14 @@ const TRUST = [
   },
 ];
 
+const SCREENS = [
+  { title: "Dashboard", image: "/eg-screen-dashboard.png" },
+  { title: "PDV / Caixa", image: "/eg-screen-pdv.png" },
+  { title: "Pedidos", image: "/eg-screen-pedidos.png" },
+  { title: "Relatorios", image: "/eg-screen-relatorios.png" },
+  { title: "Fidelidade", image: "/eg-screen-fidelidade.png" },
+];
+
 const STEPS = [
   "Configuracao da loja, cardapio e identidade visual",
   "Treinamento rapido para equipe e operacao do painel",
@@ -130,12 +136,10 @@ export default function Landing() {
         </nav>
 
         <div className="eg-actions">
-          <button className="eg-btn eg-btn-outline" onClick={() => go("demonstracao")}>
-            Ver Demonstracao
-          </button>
-          <button className="eg-btn eg-btn-primary" onClick={() => go("contato")}>
+          <Link className="eg-btn eg-btn-primary eg-btn-strong" to="/themazuki/master?tab=register">
             Quero Meu Sistema
-          </button>
+            <ArrowRight size={19} />
+          </Link>
         </div>
 
         <button className="eg-menu-btn" onClick={() => setMobileOpen((v) => !v)} aria-label="Abrir menu">
@@ -155,15 +159,13 @@ export default function Landing() {
                 {item.label}
               </button>
             ))}
-            <button
+            <Link
               className="eg-btn eg-btn-primary"
-              onClick={() => {
-                go("contato");
-                setMobileOpen(false);
-              }}
+              to="/themazuki/master?tab=register"
+              onClick={() => setMobileOpen(false)}
             >
               Quero Meu Sistema
-            </button>
+            </Link>
           </div>
         )}
       </header>
@@ -174,7 +176,6 @@ export default function Landing() {
 
         <div className="eg-hero-content">
           <div className="eg-kicker">
-            <span />
             Sistema completo de delivery
           </div>
 
@@ -189,12 +190,10 @@ export default function Landing() {
           </p>
 
           <div className="eg-hero-buttons">
-            <button className="eg-btn eg-btn-primary eg-btn-big" onClick={() => go("contato")}>
+            <Link className="eg-btn eg-btn-primary eg-btn-big eg-btn-strong" to="/themazuki/master?tab=register">
               Quero Meu Sistema <ArrowRight size={21} />
-            </button>
-            <button className="eg-btn eg-btn-outline eg-btn-big" onClick={() => go("demonstracao")}>
-              Ver Demonstracao <Play size={19} />
-            </button>
+            </Link>
+            <span className="eg-price-pill">Oferta de lancamento: R$ 49,90/mes</span>
           </div>
 
           <div className="eg-proof-row">
@@ -239,13 +238,13 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className="eg-demo" id="demonstracao">
+      <section className="eg-demo" id="telas">
         <div>
-          <span className="eg-mini-label">Demonstracao</span>
-          <h2>Veja como a EG Delivery transforma seu atendimento</h2>
+          <span className="eg-mini-label">Telas reais</span>
+          <h2>O sistema que o restaurante usa todos os dias</h2>
           <p>
-            O restaurante ganha um cardapio online profissional, uma area administrativa completa e
-            um fluxo de pedidos simples para a equipe operar todos os dias.
+            Painel, pedidos, PDV, relatorios e fidelidade em uma estrutura simples para operar,
+            acompanhar vendas e atender melhor.
           </p>
           <ul>
             {STEPS.map((step) => (
@@ -257,25 +256,13 @@ export default function Landing() {
           </ul>
         </div>
 
-        <div className="eg-demo-panel">
-          <div className="eg-demo-top">
-            <span>Pedido #1842</span>
-            <strong>Em preparo</strong>
-          </div>
-          <div className="eg-demo-line">
-            <PackageCheck size={22} />
-            <span>
-              <strong>Combo Burguer Premium</strong>
-              <small>2 itens, entrega em 42 min</small>
-            </span>
-          </div>
-          <div className="eg-demo-progress">
-            <span />
-          </div>
-          <div className="eg-demo-stats">
-            <strong>R$ 68,90</strong>
-            <small>Pagamento aprovado</small>
-          </div>
+        <div className="eg-screen-gallery">
+          {SCREENS.map((screen, index) => (
+            <figure key={screen.title} className={index === 0 ? "is-large" : ""}>
+              <img src={screen.image} alt={`Tela do EG Delivery - ${screen.title}`} loading="lazy" />
+              <figcaption>{screen.title}</figcaption>
+            </figure>
+          ))}
         </div>
       </section>
 
@@ -302,17 +289,17 @@ export default function Landing() {
           <span className="eg-mini-label">Contato</span>
           <h2>Pronto para vender com uma estrutura profissional?</h2>
           <p>
-            Solicite uma demonstracao e veja como a EG Delivery pode colocar sua operacao online com
-            mais velocidade, controle e presenca digital.
+            Crie seu cadastro e veja como a EG Delivery pode colocar sua operacao online com mais
+            velocidade, controle e presenca digital.
           </p>
         </div>
         <div className="eg-contact-actions">
-          <a className="eg-btn eg-btn-primary eg-btn-big" href="https://www.instagram.com/easygrowtth/" target="_blank" rel="noreferrer">
-            Falar com a Easy Growth <ArrowRight size={21} />
-          </a>
-          <Link className="eg-btn eg-btn-outline eg-btn-big" to="/themazuki/master">
-            Acessar Painel
+          <Link className="eg-btn eg-btn-primary eg-btn-big eg-btn-strong" to="/themazuki/master?tab=register">
+            Quero Meu Sistema <ArrowRight size={21} />
           </Link>
+          <a className="eg-btn eg-btn-outline eg-btn-big" href="https://www.instagram.com/easygrowtth/" target="_blank" rel="noreferrer">
+            Falar com a Easy Growth
+          </a>
         </div>
       </section>
 
@@ -441,6 +428,11 @@ export default function Landing() {
           box-shadow: 0 18px 44px rgba(34,227,155,.2);
         }
 
+        .eg-btn-strong {
+          min-width: 214px;
+          box-shadow: 0 18px 52px rgba(34,227,155,.35), inset 0 1px 0 rgba(255,255,255,.42);
+        }
+
         .eg-btn-outline {
           border: 1.5px solid rgba(34,227,155,.75);
           background: rgba(0,0,0,.24);
@@ -537,13 +529,6 @@ export default function Landing() {
           text-transform: uppercase;
         }
 
-        .eg-kicker span {
-          width: 40px;
-          height: 2px;
-          border-radius: 999px;
-          background: ${GREEN};
-        }
-
         .eg-hero h1 {
           max-width: 720px;
           margin: 34px 0 22px;
@@ -574,6 +559,19 @@ export default function Landing() {
           gap: 24px;
           align-items: center;
           flex-wrap: wrap;
+        }
+
+        .eg-price-pill {
+          display: inline-flex;
+          min-height: 46px;
+          align-items: center;
+          border-radius: 999px;
+          padding: 0 20px;
+          border: 1px solid rgba(34,227,155,.34);
+          background: rgba(34,227,155,.08);
+          color: rgba(255,255,255,.9);
+          font-size: 15px;
+          font-weight: 800;
         }
 
         .eg-proof-row {
@@ -749,7 +747,7 @@ export default function Landing() {
         .eg-contact {
           padding: 104px 68px;
           display: grid;
-          grid-template-columns: minmax(0, 1fr) minmax(420px, 560px);
+          grid-template-columns: minmax(360px, 520px) minmax(0, 1fr);
           gap: 64px;
           align-items: center;
           background:
@@ -783,72 +781,49 @@ export default function Landing() {
           flex: 0 0 auto;
         }
 
-        .eg-demo-panel {
-          border: 1px solid rgba(34,227,155,.24);
-          border-radius: 8px;
-          padding: 28px;
-          background: linear-gradient(145deg, rgba(255,255,255,.09), rgba(255,255,255,.035));
-          box-shadow: 0 38px 100px rgba(0,0,0,.38);
-        }
-
-        .eg-demo-top,
-        .eg-demo-line,
-        .eg-demo-stats {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
+        .eg-screen-gallery {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 16px;
+          align-items: stretch;
         }
 
-        .eg-demo-top strong {
-          color: ${GREEN};
-        }
-
-        .eg-demo-line {
-          justify-content: flex-start;
-          margin: 36px 0;
-          padding: 24px;
-          border-radius: 8px;
-          background: rgba(0,0,0,.28);
-        }
-
-        .eg-demo-line svg {
-          color: ${GREEN};
-          flex: 0 0 auto;
-        }
-
-        .eg-demo-line strong,
-        .eg-demo-line small {
-          display: block;
-        }
-
-        .eg-demo-line small,
-        .eg-demo-stats small {
-          color: rgba(255,255,255,.58);
-          margin-top: 4px;
-        }
-
-        .eg-demo-progress {
-          height: 10px;
+        .eg-screen-gallery figure {
+          position: relative;
+          min-height: 190px;
+          margin: 0;
           overflow: hidden;
-          border-radius: 999px;
-          background: rgba(255,255,255,.09);
+          border: 1px solid rgba(255,255,255,.12);
+          border-radius: 8px;
+          background: rgba(255,255,255,.05);
+          box-shadow: 0 26px 70px rgba(0,0,0,.34);
         }
 
-        .eg-demo-progress span {
-          display: block;
-          width: 72%;
+        .eg-screen-gallery figure.is-large {
+          grid-column: 1 / -1;
+          min-height: 290px;
+        }
+
+        .eg-screen-gallery img {
+          width: 100%;
           height: 100%;
-          border-radius: inherit;
-          background: linear-gradient(90deg, ${GREEN}, #83ffd0);
+          display: block;
+          object-fit: cover;
+          object-position: top left;
         }
 
-        .eg-demo-stats {
-          margin-top: 24px;
-        }
-
-        .eg-demo-stats strong {
-          font: 800 34px Outfit, sans-serif;
+        .eg-screen-gallery figcaption {
+          position: absolute;
+          left: 14px;
+          bottom: 14px;
+          border-radius: 999px;
+          padding: 8px 13px;
+          background: rgba(0,0,0,.68);
+          border: 1px solid rgba(255,255,255,.16);
+          color: #fff;
+          font-size: 13px;
+          font-weight: 800;
+          backdrop-filter: blur(10px);
         }
 
         .eg-faq-list {
@@ -1171,8 +1146,9 @@ export default function Landing() {
             min-height: auto;
           }
 
-          .eg-demo-panel {
-            padding: 20px;
+          .eg-price-pill {
+            width: 100%;
+            justify-content: center;
           }
         }
       `}</style>
