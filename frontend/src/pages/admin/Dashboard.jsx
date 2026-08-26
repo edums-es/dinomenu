@@ -66,7 +66,8 @@ export default function Dashboard() {
     return () => clearInterval(t);
   }, [load]);
 
-  const toggleOpen = async () => {
+  const toggleOpen = async (checked) => {
+    if (!checked && !window.confirm("Fechar a loja para pedidos online sem alterar os horarios cadastrados?")) return;
     await api.post("/admin/restaurant/toggle-open");
     load();
   };

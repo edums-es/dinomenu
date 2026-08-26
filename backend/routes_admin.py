@@ -82,8 +82,9 @@ async def update_restaurant(settings: RestaurantSettings, user=Depends(require_r
 async def toggle_open(user=Depends(require_restaurant)):
     r = await db.restaurants.find_one({"id": rid(user)})
     new_val = not bool(r.get("is_open_manual", True))
-    await db.restaurants.update_one({"id": rid(user)}, {"$set": {"is_open_manual": new_val}})
-    return {"is_open_manual": new_val}
+    await db.restaurants.update_one({"id": rid(user)}, {"$set": {"is_open_manual": new_val, "updated_at": now_iso()}})
+    updated = await db.restaurants.find_one({"id": rid(user)}, {"_id": 0})
+    return {"is_open_manual": new_val, "is_open": is_restaurant_open(updated)}
 
 
 @router.get("/restaurant/slug")
